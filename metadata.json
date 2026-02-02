@@ -1,0 +1,7 @@
+{
+  "name": "AssetTrackPro",
+  "description": "A comprehensive, role-based enterprise asset management platform with AI-powered insights, audit tracking, and automated workflows.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
