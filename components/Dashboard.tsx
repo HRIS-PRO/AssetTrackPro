@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, UserRole, Asset, Activity } from '../types';
+import { User, UserRole, Asset, Activity, AssetStatus } from '../types';
 
 interface DashboardProps {
   user: User;
@@ -12,11 +12,38 @@ interface DashboardProps {
   onReportProblem: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ 
-  user, assets, isDarkMode, activities, onRequestAsset, onReportProblem 
+export const Dashboard: React.FC<DashboardProps> = ({
+  user, assets: initialAssets, isDarkMode, activities, onRequestAsset, onReportProblem
 }) => {
+  const [assets, setAssets] = React.useState<Asset[]>(initialAssets);
+
+  // Sync state if props change
+  React.useEffect(() => {
+    setAssets(initialAssets);
+  }, [initialAssets]);
+
   const isSuperAdmin = user.role === UserRole.SUPER_ADMIN;
   const navigate = useNavigate();
+
+  // Accept Asset Logic
+  const handleAcceptAsset = async (assetId: string) => {
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const res = await fetch(`/api/assets/${assetId}/accept`, {
+        method: 'PUT',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        setAssets(prev => prev.map(a => a.id === assetId ? { ...a, status: AssetStatus.ACTIVE } : a));
+      } else {
+        const error = await res.json().catch(() => ({}));
+        alert(`Failed to accept asset: ${error.message || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error while accepting asset.');
+    }
+  };
 
   // Unified Stat Cards Calculation
   const stats = useMemo(() => {
@@ -32,32 +59,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
       largeIcon: string;
       badge?: string;
     }> = [
-      {
-        label: isSuperAdmin ? 'Total Assets' : 'My Total Assets',
-        value: isSuperAdmin ? assets.length : myAssets.length,
-        icon: 'devices',
-        color: 'blue',
-        subText: isSuperAdmin ? 'tracked globally' : 'items in possession',
-        largeIcon: 'laptop_mac'
-      },
-      {
-        label: 'Pending Consents',
-        value: isSuperAdmin ? 12 : 1,
-        icon: 'signature',
-        color: 'amber',
-        subText: isSuperAdmin ? 'global queue' : 'action required',
-        largeIcon: 'gavel',
-        badge: isSuperAdmin ? undefined : 'Action Required'
-      },
-      {
-        label: isSuperAdmin ? 'Pending Requests' : 'Active Requests',
-        value: isSuperAdmin ? 8 : 1,
-        icon: 'confirmation_number',
-        color: 'purple',
-        subText: isSuperAdmin ? 'waiting approval' : 'in progress',
-        largeIcon: 'receipt_long'
-      }
-    ];
+        {
+          label: isSuperAdmin ? 'Total Assets' : 'My Total Assets',
+          value: isSuperAdmin ? assets.length : myAssets.length,
+          icon: 'devices',
+          color: 'blue',
+          subText: isSuperAdmin ? 'tracked globally' : 'items in possession',
+          largeIcon: 'laptop_mac'
+        },
+        {
+          label: 'Pending Consents',
+          value: isSuperAdmin ? 12 : 1,
+          icon: 'signature',
+          color: 'amber',
+          subText: isSuperAdmin ? 'global queue' : 'action required',
+          largeIcon: 'gavel',
+          badge: isSuperAdmin ? undefined : 'Action Required'
+        },
+        {
+          label: isSuperAdmin ? 'Pending Requests' : 'Active Requests',
+          value: isSuperAdmin ? 8 : 1,
+          icon: 'confirmation_number',
+          color: 'purple',
+          subText: isSuperAdmin ? 'waiting approval' : 'in progress',
+          largeIcon: 'receipt_long'
+        }
+      ];
 
     if (isSuperAdmin) {
       baseStats.push({
@@ -123,7 +150,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
             <button className="text-blue-600 dark:text-blue-400 font-bold text-sm hover:underline">View History</button>
           </div>
-          
+
           <div className="divide-y divide-slate-50 dark:divide-slate-800/50 flex-1">
             {filteredActivities.length > 0 ? filteredActivities.map((act) => (
               <div key={act.id} className="p-8 space-y-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors relative">
@@ -142,21 +169,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{act.desc}</p>
                   </div>
                 </div>
-                {act.hasCTA && act.targetUserId === user.id && (
-                  <div className="pl-16">
-                    <button 
-                      onClick={() => navigate(`/consent/${(act as any).assetId || 'AST-001'}`)}
-                      className="px-6 py-2 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20"
-                    >
-                      Take Action
-                    </button>
-                  </div>
-                )}
               </div>
             )) : (
               <div className="p-20 text-center flex flex-col items-center gap-4">
-                 <span className="material-symbols-outlined text-4xl text-slate-200">history_toggle_off</span>
-                 <p className="font-bold text-slate-400">No activities to display.</p>
+                <span className="material-symbols-outlined text-4xl text-slate-200">history_toggle_off</span>
+                <p className="font-bold text-slate-400">No activities to display.</p>
               </div>
             )}
           </div>
@@ -164,6 +181,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         {/* Side Column: Audit & Actions */}
         <div className="space-y-8">
+          {/* Pending Asset Assignments */}
+          {assets.filter(a => a.assignedTo === user.id && a.status === AssetStatus.PENDING).length > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-900/10 rounded-[2.5rem] border border-amber-200 dark:border-amber-800/30 p-8 shadow-sm space-y-6">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="material-symbols-outlined text-amber-600">assignment_late</span>
+                <h3 className="text-sm font-black text-amber-900 dark:text-amber-500 uppercase tracking-widest">Pending Assignments</h3>
+              </div>
+              <div className="space-y-4">
+                {assets.filter(a => a.assignedTo === user.id && a.status === AssetStatus.PENDING).map(asset => (
+                  <div key={asset.id} className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-amber-100 dark:border-amber-900/20">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <p className="font-bold text-sm text-slate-900 dark:text-white">{asset.name}</p>
+                        <p className="text-xs font-bold text-slate-500">{asset.id}</p>
+                      </div>
+                      <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-black uppercase rounded-lg">Review</span>
+                    </div>
+                    <button
+                      onClick={() => handleAcceptAsset(asset.id)}
+                      className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs tracking-widest uppercase rounded-xl transition-all shadow-md shadow-blue-500/20"
+                    >
+                      Accept Asset
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-slate-900 dark:bg-slate-800 rounded-[2.5rem] p-8 text-white relative overflow-hidden group shadow-2xl">
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-6">
@@ -185,7 +231,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <span>75%</span>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => navigate('/audits')}
                 className="w-full py-4 bg-white text-slate-900 rounded-2xl font-black text-sm tracking-tight hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
               >
@@ -198,8 +244,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {!isSuperAdmin && (
             <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 shadow-sm space-y-6">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Quick Actions</h3>
-              
-              <button 
+
+              <button
                 onClick={onRequestAsset}
                 className="w-full group flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-100 dark:hover:border-slate-700 rounded-2xl transition-all"
               >
@@ -213,8 +259,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                 </div>
               </button>
-              
-              <button 
+
+              <button
                 onClick={onReportProblem}
                 className="w-full group flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-100 dark:hover:border-slate-700 rounded-2xl transition-all"
               >

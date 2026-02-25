@@ -23,7 +23,8 @@ export enum AssetStatus {
   MAINTENANCE = 'MAINTENANCE',
   PENDING = 'PENDING',
   LOST = 'LOST',
-  DECOMMISSIONED = 'DECOMMISSIONED'
+  DECOMMISSIONED = 'DECOMMISSIONED',
+  IDLE = 'IDLE'
 }
 
 export interface Asset {

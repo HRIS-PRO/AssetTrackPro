@@ -18,15 +18,27 @@ import { ReportProblemModal } from './components/ReportProblemModal';
 import { AssetConsent } from './components/AssetConsent';
 
 const AppContent: React.FC = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    const token = localStorage.getItem('asset_track_token');
+    const savedUserStr = localStorage.getItem('asset_track_user');
+    if (token && savedUserStr) {
+      try {
+        return JSON.parse(savedUserStr);
+      } catch (e) {
+        console.error("Failed to parse saved user", e);
+      }
+    }
+    return null;
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile-first closed state
-  const [assets, setAssets] = useState<Asset[]>(MOCK_ASSETS);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [team, setTeam] = useState<User[]>(MOCK_USERS);
   const [activities, setActivities] = useState<Activity[]>(MOCK_ACTIVITIES);
   const [categories, setCategories] = useState<string[]>(CATEGORIES);
-  const [departments, setDepartments] = useState<string[]>(DEPARTMENTS);
+  const [departments, setDepartments] = useState<string[]>([]);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+
   // Modal Controller
   const [activeModal, setActiveModal] = useState<'request' | 'report' | null>(null);
   const [modalInitialAssetId, setModalInitialAssetId] = useState<string | undefined>();
@@ -52,9 +64,32 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
+  React.useEffect(() => {
+    const fetchAssets = async () => {
+      try {
+        const token = localStorage.getItem('asset_track_token');
+        const res = await fetch('/api/assets', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAssets(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch assets", err);
+      }
+    };
+
+    if (user) {
+      fetchAssets();
+    }
+  }, [user]);
+
   const handleLogin = (u: User) => setUser(u);
   const handleLogout = () => {
     setUser(null);
+    localStorage.removeItem('asset_track_token');
+    localStorage.removeItem('asset_track_user');
     setShowLogoutConfirm(false);
   };
 
@@ -74,62 +109,65 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-      <Sidebar 
-        user={user} 
-        isOpen={isSidebarOpen} 
-        setIsOpen={setIsSidebarOpen} 
+      <Sidebar
+        user={user}
+        isOpen={isSidebarOpen}
+        setIsOpen={setIsSidebarOpen}
         onLogout={() => setShowLogoutConfirm(true)}
         isDarkMode={isDarkMode}
         onRoleChange={handleRoleChange}
       />
-      
+
       <main className="flex-1 overflow-y-auto transition-all duration-300 relative">
-        <Header 
-          user={user} 
-          isDarkMode={isDarkMode} 
+        <Header
+          user={user}
+          isDarkMode={isDarkMode}
           activities={activities}
           setActivities={setActivities}
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
+          searchQuery={globalSearchQuery}
+          setSearchQuery={setGlobalSearchQuery}
         />
-        
+
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-fade-in">
           <Routes>
-            <Route path="/" element={<Dashboard 
-              user={user} 
-              assets={assets} 
-              isDarkMode={isDarkMode} 
+            <Route path="/" element={<Dashboard
+              user={user}
+              assets={assets}
+              isDarkMode={isDarkMode}
               activities={activities}
               onRequestAsset={() => setActiveModal('request')}
               onReportProblem={() => openReportModal()}
             />} />
-            <Route path="/assets" element={<AssetManagement 
-              user={user} 
-              assets={assets} 
-              setAssets={setAssets} 
+            <Route path="/assets" element={<AssetManagement
+              user={user}
+              assets={assets}
+              setAssets={setAssets}
               categories={categories}
               setCategories={setCategories}
               departments={departments}
               setDepartments={setDepartments}
               team={team}
               onReportAsset={openReportModal}
+              searchQuery={globalSearchQuery}
             />} />
-            <Route path="/consent/:assetId" element={<AssetConsent 
-              user={user} 
-              assets={assets} 
+            <Route path="/consent/:assetId" element={<AssetConsent
+              user={user}
+              assets={assets}
               onReportIssue={openReportModal}
             />} />
-            <Route path="/requests" element={<Requests 
-              user={user} 
+            <Route path="/requests" element={<Requests
+              user={user}
               onRequestAsset={() => setActiveModal('request')}
             />} />
             <Route path="/audits" element={<Audits user={user} assets={assets} />} />
             <Route path="/reports" element={<Reports user={user} assets={assets} categories={categories} departments={departments} />} />
             <Route path="/profile" element={<Profile user={user} />} />
-            <Route path="/settings" element={<Settings 
-              user={user} 
-              team={team} 
-              setTeam={setTeam} 
+            <Route path="/settings" element={<Settings
+              user={user}
+              team={team}
+              setTeam={setTeam}
               categories={categories}
               setCategories={setCategories}
               departments={departments}
@@ -141,13 +179,13 @@ const AppContent: React.FC = () => {
       </main>
 
       {/* Global Modals */}
-      <RequestAssetModal 
+      <RequestAssetModal
         isOpen={activeModal === 'request'}
         onClose={() => setActiveModal(null)}
         onSubmit={(data) => console.log('Asset Request Submitted:', data)}
       />
-      
-      <ReportProblemModal 
+
+      <ReportProblemModal
         isOpen={activeModal === 'report'}
         onClose={() => setActiveModal(null)}
         onSubmit={(data) => console.log('Problem Reported:', data)}

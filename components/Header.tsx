@@ -10,15 +10,19 @@ interface HeaderProps {
   setActivities: React.Dispatch<React.SetStateAction<Activity[]>>;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
+  searchQuery: string;
+  setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
 }
 
-export const Header: React.FC<HeaderProps> = ({ 
-  user, 
-  isDarkMode, 
-  activities, 
-  setActivities, 
-  isSidebarOpen, 
-  setIsSidebarOpen 
+export const Header: React.FC<HeaderProps> = ({
+  user,
+  isDarkMode,
+  activities,
+  setActivities,
+  isSidebarOpen,
+  setIsSidebarOpen,
+  searchQuery,
+  setSearchQuery
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -65,10 +69,10 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between px-4 md:px-8 py-4 md:py-6 glass-panel transition-colors">
+    <header className="sticky top-0 z-40 flex items-center justify-between px-4 md:px-8 py-4 md:py-6 bg-white/90 dark:bg-slate-950/90 backdrop-blur-2xl border-b border-slate-200/50 dark:border-slate-800/50 transition-colors">
       <div className="flex items-center gap-4">
         {/* Mobile Menu Trigger */}
-        <button 
+        <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-500"
         >
@@ -91,24 +95,27 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div className="flex items-center gap-2 md:gap-4">
         <div className="relative group hidden lg:block">
-          <input 
-            type="text" 
-            placeholder="Search assets..." 
-            className="pl-12 pr-6 py-3 rounded-full bg-slate-100 dark:bg-slate-800 border-none focus:ring-2 focus:ring-blue-500 w-64 transition-all dark:text-white dark:placeholder-slate-500 shadow-inner"
+          <input
+            type="text"
+            placeholder="Search assets..."
+            value={searchQuery || ''}
+            onChange={(e) => setSearchQuery?.(e.target.value)}
+            className="pl-12 pr-16 py-2.5 rounded-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-700/50 focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 w-72 transition-all dark:text-white dark:placeholder-slate-500 outline-none text-sm"
           />
-          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors">search</span>
+          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors text-[20px]">search</span>
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            <kbd className="hidden sm:inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-sm">⌘K</kbd>
+          </div>
         </div>
 
         <div className="relative" ref={notificationRef}>
-          <button 
+          <button
             onClick={() => setShowNotifications(!showNotifications)}
             className={`relative p-2.5 md:p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 ${showNotifications ? 'bg-slate-100 dark:bg-slate-800 text-blue-500' : ''}`}
           >
-            <span className="material-symbols-outlined">notifications</span>
+            <span className="material-symbols-outlined text-[22px]">notifications</span>
             {filteredUnreadActivities.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 md:top-2 md:right-2 w-4 md:w-5 h-4 md:h-5 bg-red-500 text-white text-[9px] md:text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900 animate-pulse">
-                {filteredUnreadActivities.length}
-              </span>
+              <span className="absolute top-2 right-2 md:top-2 md:right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-900 shadow-sm shadow-red-500/50 ring-2 ring-red-500/20 animate-pulse"></span>
             )}
           </button>
 
@@ -124,8 +131,8 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="flex-1 overflow-y-auto scrollbar-hide py-2">
                 {filteredUnreadActivities.length > 0 ? (
                   filteredUnreadActivities.map(act => (
-                    <button 
-                      key={act.id} 
+                    <button
+                      key={act.id}
                       onClick={() => markAsRead(act.id, act.assetId)}
                       className="w-full p-5 md:p-6 text-left hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors flex items-start gap-3 md:gap-4 border-b border-slate-50 dark:border-slate-800/30 last:border-0"
                     >
@@ -147,7 +154,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ) : (
                   <div className="p-10 md:p-12 text-center flex flex-col items-center justify-center gap-4">
                     <div className="w-14 h-14 md:w-16 md:h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-200 dark:text-slate-700">
-                       <span className="material-symbols-outlined text-3xl md:text-4xl">notifications_off</span>
+                      <span className="material-symbols-outlined text-3xl md:text-4xl">notifications_off</span>
                     </div>
                     <div>
                       <p className="text-sm font-black dark:text-white">All Caught Up</p>
@@ -156,9 +163,9 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 )}
               </div>
-              
+
               <div className="p-4 md:p-6 bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 text-center">
-                <button 
+                <button
                   onClick={() => { setShowNotifications(false); navigate('/'); }}
                   className="text-[10px] font-black text-slate-400 hover:text-slate-900 dark:hover:text-white uppercase tracking-widest transition-colors"
                 >
@@ -171,12 +178,12 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1 md:mx-2"></div>
 
-        <div className="flex items-center gap-2 md:gap-3">
+        <div className="flex items-center gap-2 md:gap-3 cursor-pointer group">
           <div className="text-right hidden sm:block">
-            <p className="text-sm font-bold dark:text-white leading-none mb-0.5">{user.name}</p>
-            <p className="text-[9px] text-slate-500 dark:text-slate-600 font-bold uppercase tracking-widest leading-none">{user.department}</p>
+            <p className="text-[13px] font-black dark:text-white leading-none mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{user.name}</p>
+            <p className="text-[9px] text-slate-500 dark:text-slate-500 font-bold uppercase tracking-[0.15em] leading-none">{user.department}</p>
           </div>
-          <img src={user.avatar} className="w-9 h-9 md:w-11 md:h-11 rounded-full border-2 md:border-4 border-white dark:border-slate-800 shadow-md" alt="" />
+          <img src={user.avatar} className="w-9 h-9 md:w-10 md:h-10 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm group-hover:ring-4 ring-slate-100 dark:ring-slate-800 transition-all ml-1" alt="" />
         </div>
       </div>
     </header>
