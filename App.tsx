@@ -16,6 +16,9 @@ import { Reports } from './components/Reports';
 import { RequestAssetModal } from './components/RequestAssetModal';
 import { ReportProblemModal } from './components/ReportProblemModal';
 import { AssetConsent } from './components/AssetConsent';
+import { ToastProvider, useToast } from './components/Toast';
+import { useReportSocket } from './hooks/useReportSocket';
+import { ReportStatus } from './types';
 
 const AppContent: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
@@ -34,8 +37,10 @@ const AppContent: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [team, setTeam] = useState<User[]>(MOCK_USERS);
   const [activities, setActivities] = useState<Activity[]>(MOCK_ACTIVITIES);
-  const [categories, setCategories] = useState<string[]>(CATEGORIES);
-  const [departments, setDepartments] = useState<string[]>([]);
+  const [categories, setCategories] = useState<{ id: string, name: string }[]>([]);
+  const [assetLocations, setAssetLocations] = useState<{ id: string, name: string }[]>([]);
+  const [departments, setDepartments] = useState<{ id: string, name: string }[]>([]);
+  const [superAdmins, setSuperAdmins] = useState<{ id: string, email: string }[]>([]);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
 
@@ -80,8 +85,42 @@ const AppContent: React.FC = () => {
       }
     };
 
+    const fetchMetadata = async () => {
+      try {
+        const token = localStorage.getItem('asset_track_token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+        const [catRes, locRes, saRes, deptRes] = await Promise.all([
+          fetch('/api/asset-categories', { headers }),
+          fetch('/api/asset-locations', { headers }),
+          fetch('/api/users/super-admins', { headers }),
+          fetch('/api/departments', { headers })
+        ]);
+
+        if (catRes.ok) {
+          const cats = await catRes.json();
+          setCategories(cats);
+        }
+        if (locRes.ok) {
+          const locs = await locRes.json();
+          setAssetLocations(locs);
+        }
+        if (saRes.ok) {
+          const sans = await saRes.json();
+          setSuperAdmins(sans);
+        }
+        if (deptRes.ok) {
+          const depts = await deptRes.json();
+          setDepartments(depts.map((d: any) => ({ id: d.id, name: d.name })));
+        }
+      } catch (err) {
+        console.error("Failed to fetch metadata", err);
+      }
+    };
+
     if (user) {
       fetchAssets();
+      fetchMetadata();
     }
   }, [user]);
 
@@ -102,6 +141,30 @@ const AppContent: React.FC = () => {
     setModalInitialAssetId(assetId);
     setActiveModal('report');
   };
+
+  const { addToast } = useToast();
+
+  // Global Real-time notifications
+  useReportSocket({
+    onReportCreated: (report) => {
+      // If user is admin, show a toast about new report
+      if (user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN_USER) {
+        addToast({
+          type: 'warning',
+          title: 'New Faulty Asset Report',
+          message: `${report.userName || 'A user'} reported an issue with ${report.assetName || report.assetId}`
+        });
+      }
+    },
+    onStatusUpdated: (data) => {
+      // Always show toast for status updates on user's own reports
+      addToast({
+        type: data.status === ReportStatus.RESOLVED ? 'success' : 'info',
+        title: 'Report Status Updated',
+        message: `Your report for ${data.assetId} is now ${data.status.replace('_', ' ')}`
+      });
+    }
+  });
 
   if (!user) {
     return <Auth onLogin={handleLogin} isDarkMode={isDarkMode} />;
@@ -148,6 +211,9 @@ const AppContent: React.FC = () => {
               setCategories={setCategories}
               departments={departments}
               setDepartments={setDepartments}
+              assetLocations={assetLocations}
+              setAssetLocations={setAssetLocations}
+              superAdmins={superAdmins}
               team={team}
               onReportAsset={openReportModal}
               searchQuery={globalSearchQuery}
@@ -172,6 +238,9 @@ const AppContent: React.FC = () => {
               setCategories={setCategories}
               departments={departments}
               setDepartments={setDepartments}
+              assetLocations={assetLocations}
+              setAssetLocations={setAssetLocations}
+              superAdmins={superAdmins}
             />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
@@ -220,7 +289,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <Router>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </Router>
   );
 };

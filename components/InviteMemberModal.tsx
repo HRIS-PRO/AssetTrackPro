@@ -32,19 +32,19 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ isOpen, on
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[#020617]/80 backdrop-blur-md" onClick={onClose}></div>
-      
+
       <div className="relative bg-[#111827] w-full max-w-2xl rounded-[3rem] shadow-2xl border border-slate-800 overflow-hidden animate-fade-in p-10 md:p-12">
         {/* Close Button Header Area */}
         <div className="flex justify-start mb-6">
-          <button 
+          <button
             onClick={onClose}
             className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
           >
             <span className="material-symbols-outlined text-2xl">close</span>
           </button>
-          
+
           <div className="ml-4 w-12 h-12 rounded-2xl bg-[#1985f0]/10 flex items-center justify-center text-[#1985f0]">
-             <span className="material-symbols-outlined text-2xl font-bold">person_add</span>
+            <span className="material-symbols-outlined text-2xl font-bold">person_add</span>
           </div>
         </div>
 
@@ -58,8 +58,8 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ isOpen, on
         <div className="space-y-8">
           <div className="space-y-3">
             <label className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">LEGAL NAME</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="e.g. Jonathan Ive"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -69,8 +69,8 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ isOpen, on
 
           <div className="space-y-3">
             <label className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">CORPORATE EMAIL</label>
-            <input 
-              type="email" 
+            <input
+              type="email"
               placeholder="j.ive@acmecorp.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -86,11 +86,10 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ isOpen, on
                 <button
                   key={role.id}
                   onClick={() => setSelectedRole(role.id)}
-                  className={`py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all duration-300 border-2 ${
-                    selectedRole === role.id 
-                    ? 'bg-[#1985f0] text-white border-[#1985f0] shadow-[0_0_25px_-5px_rgba(25,133,240,0.6)]' 
-                    : 'bg-[#0f172a] text-slate-500 border-slate-800 hover:border-slate-700'
-                  }`}
+                  className={`py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all duration-300 border-2 ${selectedRole === role.id
+                      ? 'bg-[#1985f0] text-white border-[#1985f0] shadow-[0_0_25px_-5px_rgba(25,133,240,0.6)]'
+                      : 'bg-[#0f172a] text-slate-500 border-slate-800 hover:border-slate-700'
+                    }`}
                 >
                   {role.label}
                 </button>
@@ -101,13 +100,13 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({ isOpen, on
 
         {/* Actions */}
         <div className="mt-12 flex flex-col sm:flex-row gap-4 items-center">
-          <button 
+          <button
             onClick={onClose}
             className="w-full sm:w-1/3 py-5 rounded-2xl border-2 border-slate-800 text-slate-400 font-black text-sm uppercase tracking-widest hover:bg-slate-800 hover:text-white transition-all"
           >
             DISCARD
           </button>
-          <button 
+          <button
             onClick={handleConfirm}
             className="w-full sm:flex-1 py-5 rounded-2xl bg-[#1985f0] text-white font-black text-sm uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(25,133,240,0.5)] hover:bg-blue-500 transition-all flex items-center justify-center gap-3 active:scale-95"
           >

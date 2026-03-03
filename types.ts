@@ -79,3 +79,22 @@ export interface Activity {
   assetId?: string;
   isRead: boolean;
 }
+
+export enum ReportStatus {
+  PENDING = 'PENDING',
+  IN_REVIEW = 'IN_REVIEW',
+  RESOLVED = 'RESOLVED'
+}
+
+export interface AssetReport {
+  id: string;
+  assetId: string;
+  userId: string;
+  comment: string;
+  status: ReportStatus;
+  createdAt: string;
+  updatedAt: string;
+  assetName?: string;
+  assetCategory?: string;
+  userName?: string;
+}
