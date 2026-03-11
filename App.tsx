@@ -1,7 +1,7 @@
 
 import React, { useState, useLayoutEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { UserRole, User, Asset, Activity } from './types';
+import { UserRole, User, Asset, Activity, EquipmentRequest, AssetReport } from './types';
 import { MOCK_USERS, MOCK_ASSETS, CATEGORIES, DEPARTMENTS, MOCK_ACTIVITIES } from './constants';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -35,12 +35,16 @@ const AppContent: React.FC = () => {
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile-first closed state
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [team, setTeam] = useState<User[]>(MOCK_USERS);
-  const [activities, setActivities] = useState<Activity[]>(MOCK_ACTIVITIES);
+  const [team, setTeam] = useState<User[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [categories, setCategories] = useState<{ id: string, name: string }[]>([]);
   const [assetLocations, setAssetLocations] = useState<{ id: string, name: string }[]>([]);
   const [departments, setDepartments] = useState<{ id: string, name: string }[]>([]);
   const [superAdmins, setSuperAdmins] = useState<{ id: string, email: string }[]>([]);
+  const [requests, setRequests] = useState<EquipmentRequest[]>([]);
+  const [managedRequests, setManagedRequests] = useState<EquipmentRequest[]>([]);
+  const [faultyReports, setFaultyReports] = useState<AssetReport[]>([]);
+  const [managedReports, setManagedReports] = useState<AssetReport[]>([]);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
 
@@ -118,9 +122,41 @@ const AppContent: React.FC = () => {
       }
     };
 
+    const fetchRequests = async () => {
+      try {
+        const token = localStorage.getItem('asset_track_token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const [mineRes, managedRes] = await Promise.all([
+          fetch('/api/equipment-requests/me', { headers }),
+          fetch('/api/equipment-requests/managed', { headers })
+        ]);
+        if (mineRes.ok) setRequests(await mineRes.json());
+        if (managedRes.ok) setManagedRequests(await managedRes.json());
+      } catch (err) {
+        console.error("Failed to fetch requests", err);
+      }
+    };
+
+    const fetchReportsData = async () => {
+      try {
+        const token = localStorage.getItem('asset_track_token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const [mineRes, managedRes] = await Promise.all([
+          fetch('/api/reports/me', { headers }),
+          fetch('/api/reports/managed', { headers })
+        ]);
+        if (mineRes.ok) setFaultyReports(await mineRes.json());
+        if (managedRes.ok) setManagedReports(await managedRes.json());
+      } catch (err) {
+        console.error("Failed to fetch reports", err);
+      }
+    };
+
     if (user) {
       fetchAssets();
       fetchMetadata();
+      fetchRequests();
+      fetchReportsData();
     }
   }, [user]);
 
@@ -144,26 +180,136 @@ const AppContent: React.FC = () => {
 
   const { addToast } = useToast();
 
-  // Global Real-time notifications
-  useReportSocket({
-    onReportCreated: (report) => {
-      // If user is admin, show a toast about new report
-      if (user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN_USER) {
-        addToast({
-          type: 'warning',
-          title: 'New Faulty Asset Report',
-          message: `${report.userName || 'A user'} reported an issue with ${report.assetName || report.assetId}`
-        });
+  const handleReportSubmit = async (data: { assetId: string, comment: string }) => {
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Failed to submit report');
       }
-    },
-    onStatusUpdated: (data) => {
-      // Always show toast for status updates on user's own reports
+
       addToast({
-        type: data.status === ReportStatus.RESOLVED ? 'success' : 'info',
-        title: 'Report Status Updated',
-        message: `Your report for ${data.assetId} is now ${data.status.replace('_', ' ')}`
+        type: 'success',
+        title: 'Report Submitted',
+        message: 'Your faulty asset report has been recorded successfully.'
+      });
+      setActiveModal(null);
+    } catch (err: any) {
+      console.error('Report submission error:', err);
+      throw err; // Propagate to modal for inline error
+    }
+  };
+
+  const handleRequestSubmit = async (data: { categoryId: string, priority: string, justification: string }) => {
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const res = await fetch('/api/equipment-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Failed to submit request');
+      }
+
+      addToast({
+        type: 'success',
+        title: 'Request Submitted',
+        message: 'Your equipment request has been submitted for approval.'
+      });
+      setActiveModal(null);
+    } catch (err: any) {
+      console.error('Request submission error:', err);
+      throw err;
+    }
+  };
+
+  const handleReportCreated = React.useCallback((report: AssetReport) => {
+    if (report.userId === user?.id) {
+      setFaultyReports(prev => {
+        if (prev.find(r => r.id === report.id)) return prev;
+        return [report, ...prev];
+      });
+    } else {
+      setManagedReports(prev => {
+        if (prev.find(r => r.id === report.id)) return prev;
+        return [report, ...prev];
       });
     }
+    if (report.userId !== user?.id && (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN_USER)) {
+      addToast({
+        type: 'warning',
+        title: 'New Faulty Asset Report',
+        message: `${report.userName || 'A user'} reported an issue with ${report.assetName || report.assetId}`
+      });
+    }
+  }, [user?.id, user?.role, addToast]);
+
+  const handleStatusUpdated = React.useCallback((data: { id: string; status: ReportStatus; assetId: string; updatedAt: string }) => {
+    const updateFn = (r: AssetReport) => r.id === data.id ? { ...r, status: data.status, updatedAt: data.updatedAt } : r;
+    setFaultyReports(prev => prev.map(updateFn));
+    setManagedReports(prev => prev.map(updateFn));
+    // Important: Only toast if not current user OR if needed for managed items
+    addToast({
+      type: data.status === ReportStatus.RESOLVED ? 'success' : 'info',
+      title: 'Report Status Updated',
+      message: `Report for ${data.assetId} is now ${data.status.replace('_', ' ')}`
+    });
+  }, [addToast]);
+
+  const handleRequestCreated = React.useCallback((request: EquipmentRequest) => {
+    if (request.userId === user?.id) {
+      setRequests(prev => {
+        if (prev.find(r => r.id === request.id)) return prev;
+        return [request, ...prev];
+      });
+    } else {
+      setManagedRequests(prev => {
+        if (prev.find(r => r.id === request.id)) return prev;
+        return [request, ...prev];
+      });
+    }
+    if (request.userId !== user?.id && (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN_USER)) {
+      addToast({
+        type: 'info',
+        title: 'New Equipment Request',
+        message: `${request.userName} requested a ${request.categoryName}`
+      });
+    }
+  }, [user?.id, user?.role, addToast]);
+
+  const handleRequestStatusUpdated = React.useCallback((request: EquipmentRequest) => {
+    const updateFn = (r: EquipmentRequest) => r.id === request.id ? request : r;
+    setRequests(prev => prev.map(updateFn));
+    setManagedRequests(prev => prev.map(updateFn));
+    if (request.userId === user?.id) {
+      addToast({
+        type: request.status === 'APPROVED' ? 'success' : request.status === 'REJECTED' ? 'error' : 'info',
+        title: 'Request Status Updated',
+        message: `Your ${request.categoryName} request is now ${request.status.replace(/_/g, ' ')}`
+      });
+    }
+  }, [user?.id, addToast]);
+
+  useReportSocket({
+    onReportCreated: handleReportCreated,
+    onStatusUpdated: handleStatusUpdated,
+    onRequestCreated: handleRequestCreated,
+    onRequestStatusUpdated: handleRequestStatusUpdated
   });
 
   if (!user) {
@@ -202,6 +348,10 @@ const AppContent: React.FC = () => {
               activities={activities}
               onRequestAsset={() => setActiveModal('request')}
               onReportProblem={() => openReportModal()}
+              requests={requests}
+              managedRequests={managedRequests}
+              allReports={faultyReports}
+              managedReports={managedReports}
             />} />
             <Route path="/assets" element={<AssetManagement
               user={user}
@@ -226,6 +376,10 @@ const AppContent: React.FC = () => {
             <Route path="/requests" element={<Requests
               user={user}
               onRequestAsset={() => setActiveModal('request')}
+              requests={requests}
+              managedRequests={managedRequests}
+              faultyReports={faultyReports}
+              managedReports={managedReports}
             />} />
             <Route path="/audits" element={<Audits user={user} assets={assets} />} />
             <Route path="/reports" element={<Reports user={user} assets={assets} categories={categories} departments={departments} />} />
@@ -251,13 +405,14 @@ const AppContent: React.FC = () => {
       <RequestAssetModal
         isOpen={activeModal === 'request'}
         onClose={() => setActiveModal(null)}
-        onSubmit={(data) => console.log('Asset Request Submitted:', data)}
+        onSubmit={handleRequestSubmit}
+        categories={categories}
       />
 
       <ReportProblemModal
         isOpen={activeModal === 'report'}
         onClose={() => setActiveModal(null)}
-        onSubmit={(data) => console.log('Problem Reported:', data)}
+        onSubmit={handleReportSubmit}
         user={user}
         assets={assets}
         initialAssetId={modalInitialAssetId}

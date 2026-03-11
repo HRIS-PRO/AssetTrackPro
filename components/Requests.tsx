@@ -1,89 +1,64 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { User, UserRole, EquipmentRequest, AssetReport, ReportStatus } from '../types';
+import React, { useState, useMemo } from 'react';
+import { User, UserRole, EquipmentRequest, AssetReport, ReportStatus, RequestStatus, RequestPriority } from '../types';
 import { RequestDetailsModal } from './RequestDetailsModal';
-import { useReportSocket } from '../hooks/useReportSocket';
 
 interface RequestsProps {
   user: User;
   onRequestAsset: () => void;
+  requests: EquipmentRequest[];
+  managedRequests: EquipmentRequest[];
+  faultyReports: AssetReport[];
+  managedReports: AssetReport[];
 }
 
-type ActiveTab = 'All' | 'Mine' | 'FaultyReports';
+type ActiveTab = 'Provisioning' | 'AssetReports';
+type SubToggle = 'All' | 'Mine';
 
-export const Requests: React.FC<RequestsProps> = ({ user, onRequestAsset }) => {
+export const Requests: React.FC<RequestsProps> = ({
+  user,
+  onRequestAsset,
+  requests,
+  managedRequests,
+  faultyReports,
+  managedReports
+}) => {
   const isAdmin = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN_USER;
+  const [activeTab, setActiveTab] = useState<ActiveTab>('Provisioning');
+  const [subToggle, setSubToggle] = useState<SubToggle>(isAdmin ? 'All' : 'Mine');
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>(isAdmin ? 'All' : 'Mine');
-
-  // Equipment requests state
-  const [requests, setRequests] = useState<EquipmentRequest[]>([
-    { id: 'REQ-001', userId: 'u4', category: 'Laptop', priority: 'High', justification: 'Need upgraded RAM for design tasks.', status: 'Pending Approval', timestamp: '2024-03-10 09:30' },
-    { id: 'REQ-002', userId: 'u2', category: 'Monitor', priority: 'Standard', justification: 'Dual screen setup needed for coding.', status: 'Approved', timestamp: '2024-03-08 14:20' },
-    { id: 'REQ-003', userId: 'u1', category: 'Mobile Device', priority: 'Critical', justification: 'Broken screen on production testing device.', status: 'Initiated', timestamp: '2024-03-11 11:45' },
-  ]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
-
-  // Asset fault reports state
-  const [faultyReports, setFaultyReports] = useState<AssetReport[]>([]);
-  const [isLoadingReports, setIsLoadingReports] = useState(false);
-  const [reportStatusFilter, setReportStatusFilter] = useState<'ALL' | ReportStatus>('ALL');
   const [selectedReport, setSelectedReport] = useState<AssetReport | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
+  const [isUpdatingRequest, setIsUpdatingRequest] = useState<string | null>(null);
 
-  const selectedRequest = useMemo(() =>
-    requests.find(r => r.id === selectedRequestId) || null,
-    [selectedRequestId, requests]
-  );
+  const selectedRequest = useMemo(() => {
+    const all = [...requests, ...managedRequests];
+    return all.find(r => r.id === selectedRequestId) || null;
+  }, [selectedRequestId, requests, managedRequests]);
 
   const filteredRequests = useMemo(() => {
-    if (activeTab === 'Mine') {
-      return requests.filter(req => req.userId === user.id);
-    }
-    return isAdmin ? requests : requests.filter(req => req.userId === user.id);
-  }, [activeTab, user.id, isAdmin, requests]);
+    return subToggle === 'Mine' ? requests : managedRequests;
+  }, [subToggle, requests, managedRequests]);
+
+  const allFilteredReports = useMemo(() => {
+    return subToggle === 'Mine' ? faultyReports : managedReports;
+  }, [subToggle, faultyReports, managedReports]);
+
+  const [reportStatusFilter, setReportStatusFilter] = useState<'ALL' | ReportStatus>('ALL');
 
   const filteredFaultyReports = useMemo(() => {
-    if (reportStatusFilter === 'ALL') return faultyReports;
-    return faultyReports.filter(r => r.status === reportStatusFilter);
-  }, [faultyReports, reportStatusFilter]);
+    const base = allFilteredReports;
+    if (reportStatusFilter === 'ALL') return base;
+    return base.filter(r => r.status === reportStatusFilter);
+  }, [allFilteredReports, reportStatusFilter]);
 
-  const handleUpdateRequestStatus = (id: string, newStatus: EquipmentRequest['status']) => {
-    setRequests(prev => prev.map(req => req.id === id ? { ...req, status: newStatus } : req));
-  };
-
-  // Fetch faulty reports — managed (for admin) or personal (for users)
-  const fetchFaultyReports = async () => {
-    setIsLoadingReports(true);
+  const handleUpdateRequestStatus = async (requestId: string, status: RequestStatus | 'REJECTED') => {
+    setIsUpdatingRequest(requestId);
     try {
       const token = localStorage.getItem('asset_track_token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const endpoint = isAdmin ? '/api/reports/managed' : '/api/reports/me';
-      const res = await fetch(endpoint, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setFaultyReports(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch reports', err);
-    } finally {
-      setIsLoadingReports(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'FaultyReports') {
-      fetchFaultyReports();
-    }
-  }, [activeTab]);
-
-  const handleUpdateReportStatus = async (reportId: string, status: ReportStatus) => {
-    if (!isAdmin) return;
-    setIsUpdatingStatus(reportId);
-    try {
-      const token = localStorage.getItem('asset_track_token');
-      const res = await fetch(`/api/reports/${reportId}/status`, {
+      await fetch(`/api/equipment-requests/${requestId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -91,35 +66,34 @@ export const Requests: React.FC<RequestsProps> = ({ user, onRequestAsset }) => {
         },
         body: JSON.stringify({ status })
       });
-      if (res.ok) {
-        setFaultyReports(prev => prev.map(r => r.id === reportId ? { ...r, status } : r));
-        if (selectedReport?.id === reportId) {
-          setSelectedReport(prev => prev ? { ...prev, status } : null);
-        }
-      }
+      // State is updated via App.tsx socket
+    } catch (err) {
+      console.error('Failed to update request status', err);
+    } finally {
+      setIsUpdatingRequest(null);
+    }
+  };
+
+  const handleUpdateReportStatus = async (reportId: string, status: ReportStatus) => {
+    if (!isAdmin) return;
+    setIsUpdatingStatus(reportId);
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      await fetch(`/api/reports/${reportId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ status })
+      });
+      // State is updated via App.tsx socket
     } catch (err) {
       console.error('Failed to update status', err);
     } finally {
       setIsUpdatingStatus(null);
     }
   };
-
-  // --- Real-time updates ---
-  useReportSocket({
-    onReportCreated: (report) => {
-      // Local check: if admin, add to list if it matches managed categories 
-      // (simplification: just add it, filter already handles visibility if needed)
-      if (isAdmin) {
-        setFaultyReports(prev => [report, ...prev]);
-      }
-    },
-    onStatusUpdated: (data) => {
-      setFaultyReports(prev => prev.map(r => r.id === data.id ? { ...r, status: data.status, updatedAt: data.updatedAt } : r));
-      if (selectedReport?.id === data.id) {
-        setSelectedReport(prev => prev ? { ...prev, status: data.status, updatedAt: data.updatedAt } : null);
-      }
-    }
-  });
 
   const getReportStatusStyle = (status: ReportStatus) => {
     if (status === ReportStatus.RESOLVED) return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
@@ -128,9 +102,8 @@ export const Requests: React.FC<RequestsProps> = ({ user, onRequestAsset }) => {
   };
 
   const tabs: { key: ActiveTab; label: string; icon: string }[] = [
-    ...(isAdmin ? [{ key: 'All' as const, label: 'Global Requests', icon: 'public' }] : []),
-    { key: 'Mine', label: 'My Requests', icon: 'inbox' },
-    { key: 'FaultyReports', label: 'Faulty Asset Reports', icon: 'report_problem' },
+    { key: 'Provisioning', label: 'Provisioning', icon: 'add_shopping_cart' },
+    { key: 'AssetReports', label: 'Asset Reports', icon: 'report_problem' },
   ];
 
   return (
@@ -151,74 +124,104 @@ export const Requests: React.FC<RequestsProps> = ({ user, onRequestAsset }) => {
         </button>
       </div>
 
-      {/* Tab Bar */}
-      <div className="flex gap-2 p-1.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-full w-fit shadow-sm flex-wrap">
-        {tabs.map(tab => (
+      {/* Tab Bar Container */}
+      <div className="flex flex-col md:flex-row gap-6 md:items-center justify-between">
+        <div className="flex gap-2 p-1.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-full w-fit shadow-sm flex-wrap">
+          {tabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-1.5 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeTab === tab.key
+                ? tab.key === 'AssetReports'
+                  ? 'bg-red-600 text-white shadow-lg shadow-red-500/20'
+                  : 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+            >
+              <span className="material-symbols-outlined text-[14px]">{tab.icon}</span>
+              {tab.label}
+              {tab.key === 'AssetReports' && faultyReports.filter(r => r.status === ReportStatus.PENDING).length > 0 && activeTab !== 'AssetReports' && (
+                <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-black ml-1">
+                  {faultyReports.filter(r => r.status === ReportStatus.PENDING).length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Sub-toggle (Managed vs Mine) */}
+        <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl w-fit">
           <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeTab === tab.key
-              ? tab.key === 'FaultyReports'
-                ? 'bg-red-600 text-white shadow-lg shadow-red-500/20'
-                : 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-              : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
+            onClick={() => setSubToggle('All')}
+            className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${subToggle === 'All' ? 'bg-white dark:bg-slate-950 text-blue-600 shadow-sm' : 'text-slate-400'}`}
           >
-            <span className="material-symbols-outlined text-[14px]">{tab.icon}</span>
-            {tab.label}
-            {tab.key === 'FaultyReports' && faultyReports.filter(r => r.status === ReportStatus.PENDING).length > 0 && activeTab !== 'FaultyReports' && (
-              <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-black ml-1">
-                {faultyReports.filter(r => r.status === ReportStatus.PENDING).length}
-              </span>
-            )}
+            Managed Items
           </button>
-        ))}
+          <button
+            onClick={() => setSubToggle('Mine')}
+            className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${subToggle === 'Mine' ? 'bg-white dark:bg-slate-950 text-blue-600 shadow-sm' : 'text-slate-400'}`}
+          >
+            My Requests
+          </button>
+        </div>
       </div>
 
       {/* ===================== EQUIPMENT REQUESTS ===================== */}
-      {(activeTab === 'All' || activeTab === 'Mine') && (
+      {activeTab === 'Provisioning' && (
         <div className="grid grid-cols-1 gap-6">
           {filteredRequests.length > 0 ? filteredRequests.map(req => (
             <div key={req.id} className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 flex flex-col md:flex-row gap-8 items-center group shadow-sm hover:shadow-xl transition-all">
               <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-slate-400 dark:text-slate-600 shrink-0 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/10 group-hover:text-blue-600 transition-colors">
                 <span className="material-symbols-outlined text-3xl">
-                  {req.category.toLowerCase().includes('laptop') ? 'laptop_mac' :
-                    req.category.toLowerCase().includes('monitor') ? 'monitor' :
-                      req.category.toLowerCase().includes('mobile') ? 'smartphone' : 'inventory_2'}
+                  {req.categoryName?.toLowerCase().includes('laptop') ? 'laptop_mac' :
+                    req.categoryName?.toLowerCase().includes('monitor') ? 'monitor' :
+                      req.categoryName?.toLowerCase().includes('mobile') ? 'smartphone' : 'inventory_2'}
                 </span>
               </div>
 
               <div className="flex-1 space-y-1 min-w-0">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${req.priority === 'High' || req.priority === 'Critical' ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                  <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${req.priority === RequestPriority.HIGH || req.priority === RequestPriority.CRITICAL ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                     }`}>
                     {req.priority} Priority
                   </span>
-                  <span className="text-[10px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-widest font-mono">{req.id} • {req.timestamp}</span>
+                  <span className="text-[10px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-widest font-mono">#{req.id.slice(0, 8)} • {new Date(req.createdAt).toLocaleDateString()}</span>
                 </div>
-                <h3 className="text-xl font-black tracking-tight dark:text-white truncate">{req.category} Request</h3>
+                <h3 className="text-xl font-black tracking-tight dark:text-white truncate">{req.categoryName} Request</h3>
+                <p className="text-xs font-bold text-blue-500 uppercase tracking-widest">{subToggle === 'All' ? `BY: ${req.userName}` : 'MY REQUEST'}</p>
                 <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-1">{req.justification}</p>
               </div>
 
               <div className="w-full md:w-auto flex items-center gap-4 py-4 px-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl">
-                {[1, 2, 3].map(step => (
-                  <div key={step} className="flex items-center">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${(req.status === 'Approved' || req.status === 'Rejected') && step <= 3 ? 'bg-green-500 text-white' :
-                      (req.status === 'Pending Approval' && step === 1) ? 'bg-green-500 text-white' :
-                        (req.status === 'Pending Approval' && step === 2) ? 'bg-blue-600 text-white shadow-lg' :
-                          (req.status === 'Initiated' && step === 1) ? 'bg-blue-600 text-white shadow-lg' :
+                {[1, 2, 3, 4].map(step => {
+                  const statusMap: Record<string, number> = {
+                    'PENDING_HOD': 1,
+                    'PENDING_HOO': 2,
+                    'PENDING_CATEGORY_ADMIN': 3,
+                    'APPROVED': 4,
+                    'REJECTED': 0
+                  };
+                  const currentStep = statusMap[req.status] || 0;
+                  const isCompleted = req.status === 'APPROVED' ? step <= 4 : step < currentStep;
+                  const isActive = step === currentStep;
+                  const isRejected = req.status === 'REJECTED';
+
+                  return (
+                    <div key={step} className="flex items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${isRejected ? 'bg-red-100 text-red-400 border border-red-200' :
+                        isCompleted ? 'bg-green-500 text-white' :
+                          isActive ? 'bg-blue-600 text-white shadow-lg' :
                             'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
-                      }`}>
-                      {((req.status === 'Approved' || req.status === 'Rejected') && step <= 2) || (req.status === 'Pending Approval' && step === 1)
-                        ? <span className="material-symbols-outlined text-sm">check</span>
-                        : step}
+                        }`}>
+                        {isCompleted ? <span className="material-symbols-outlined text-sm">check</span> : step}
+                      </div>
+                      {step < 4 && <div className={`w-6 h-0.5 ${isCompleted ? 'bg-green-500' : 'bg-slate-200 dark:bg-slate-700'}`} />}
                     </div>
-                    {step < 3 && <div className="w-10 h-0.5 bg-slate-200 dark:bg-slate-700" />}
-                  </div>
-                ))}
-                <div className="ml-4 min-w-[100px]">
-                  <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Status</p>
-                  <p className={`text-sm font-bold ${req.status === 'Approved' ? 'text-green-500' : req.status === 'Rejected' ? 'text-red-500' : 'dark:text-white'}`}>{req.status}</p>
+                  );
+                })}
+                <div className="ml-4 min-w-[120px]">
+                  <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Status Flow</p>
+                  <p className={`text-sm font-bold ${req.status === 'APPROVED' ? 'text-green-500' : req.status === 'REJECTED' ? 'text-red-500' : 'dark:text-white'}`}>{req.status.replace(/_/g, ' ')}</p>
                 </div>
               </div>
 
@@ -232,35 +235,28 @@ export const Requests: React.FC<RequestsProps> = ({ user, onRequestAsset }) => {
           )) : (
             <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-slate-100 dark:border-slate-800">
               <span className="material-symbols-outlined text-5xl text-slate-200 dark:text-slate-800 mb-4 block">search_off</span>
-              <p className="font-bold text-slate-400">No requests found.</p>
+              <p className="font-bold text-slate-400">No {subToggle === 'Mine' ? 'personal' : 'managed'} requests found.</p>
             </div>
           )}
         </div>
       )}
 
       {/* ===================== FAULTY ASSET REPORTS ===================== */}
-      {activeTab === 'FaultyReports' && (
+      {activeTab === 'AssetReports' && (
         <div className="space-y-6">
 
           {/* Sub-header */}
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex-1 min-w-0">
               <h3 className="text-2xl font-black tracking-tight dark:text-white">
-                {isAdmin ? 'Managed Category Reports' : 'My Submitted Reports'}
+                {subToggle === 'All' ? 'Managed Category Reports' : 'My Submitted Reports'}
               </h3>
               <p className="text-sm font-bold text-slate-400">
-                {isAdmin
+                {subToggle === 'All'
                   ? 'Reports for assets in categories you manage'
                   : 'Track the status of issues you have reported'}
               </p>
             </div>
-            <button
-              onClick={fetchFaultyReports}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-slate-800 font-black text-xs uppercase tracking-widest text-slate-500 hover:border-slate-300 transition-all"
-            >
-              <span className={`material-symbols-outlined text-sm ${isLoadingReports ? 'animate-spin' : ''}`}>refresh</span>
-              Refresh
-            </button>
 
             {/* Status filter pills */}
             <div className="flex flex-wrap gap-2">
@@ -282,15 +278,8 @@ export const Requests: React.FC<RequestsProps> = ({ user, onRequestAsset }) => {
             </div>
           </div>
 
-          {/* Loading */}
-          {isLoadingReports && (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-            </div>
-          )}
-
           {/* Empty */}
-          {!isLoadingReports && filteredFaultyReports.length === 0 && (
+          {filteredFaultyReports.length === 0 && (
             <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border-[3px] border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center py-24 gap-4">
               <div className="w-20 h-20 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
                 <span className="material-symbols-outlined text-4xl text-slate-300">inbox</span>
@@ -299,7 +288,7 @@ export const Requests: React.FC<RequestsProps> = ({ user, onRequestAsset }) => {
               <p className="text-slate-400 text-xs font-bold">
                 {reportStatusFilter !== 'ALL'
                   ? `No ${reportStatusFilter.replace('_', ' ').toLowerCase()} reports`
-                  : isAdmin
+                  : subToggle === 'All'
                     ? 'No reports submitted for your asset categories yet'
                     : 'You have not submitted any asset reports yet'}
               </p>
@@ -307,7 +296,7 @@ export const Requests: React.FC<RequestsProps> = ({ user, onRequestAsset }) => {
           )}
 
           {/* Report cards */}
-          {!isLoadingReports && filteredFaultyReports.length > 0 && (
+          {filteredFaultyReports.length > 0 && (
             <div className="grid gap-4">
               {filteredFaultyReports.map(report => (
                 <div
@@ -323,21 +312,26 @@ export const Requests: React.FC<RequestsProps> = ({ user, onRequestAsset }) => {
                     <div className="flex-1 space-y-3 min-w-0">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
-                          <p className="font-black dark:text-white text-lg leading-tight">{report.assetName || report.assetId}</p>
-                          <p className="text-xs font-bold text-slate-400 mt-0.5">
-                            {isAdmin && report.userName && (
-                              <>
-                                <span className="material-symbols-outlined text-xs align-middle mr-1">person</span>
-                                {report.userName}
-                              </>
-                            )}
-                            {report.assetCategory && (
-                              <span className={isAdmin && report.userName ? 'ml-3' : ''}>
-                                <span className="material-symbols-outlined text-xs align-middle mr-1">category</span>
-                                {report.assetCategory}
-                              </span>
-                            )}
-                          </p>
+                          <p className="font-black dark:text-white text-lg leading-tight uppercase tracking-tight">{report.assetName || report.assetId || 'Unknown Asset'}</p>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                            <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">
+                              SN: {report.assetSerialNumber || report.assetId || 'N/A'}
+                            </p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center">
+                              {subToggle === 'All' && report.userName && (
+                                <span className="flex items-center">
+                                  <span className="material-symbols-outlined text-[12px] mr-1">person</span>
+                                  {report.userName}
+                                </span>
+                              )}
+                              {report.assetCategory && (
+                                <span className={`flex items-center ${subToggle === 'All' && report.userName ? 'ml-3' : ''}`}>
+                                  <span className="material-symbols-outlined text-[12px] mr-1">category</span>
+                                  {report.assetCategory}
+                                </span>
+                              )}
+                            </p>
+                          </div>
                         </div>
                         <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex-shrink-0 ${getReportStatusStyle(report.status)}`}>
                           {report.status.replace('_', ' ')}
@@ -435,8 +429,12 @@ export const Requests: React.FC<RequestsProps> = ({ user, onRequestAsset }) => {
             <div className="p-8 space-y-6 max-h-[50vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Asset</p>
-                  <p className="font-black dark:text-white">{selectedReport.assetName || selectedReport.assetId}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Asset Name</p>
+                  <p className="font-black dark:text-white text-lg">{selectedReport.assetName || selectedReport.assetId || 'Unknown Asset'}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Serial Number</p>
+                  <p className="font-black text-blue-600 dark:text-blue-400">{selectedReport.assetSerialNumber || selectedReport.assetId || 'N/A'}</p>
                 </div>
                 {isAdmin && selectedReport.userName && (
                   <div className="space-y-1">
@@ -490,6 +488,7 @@ export const Requests: React.FC<RequestsProps> = ({ user, onRequestAsset }) => {
         onClose={() => setSelectedRequestId(null)}
         onUpdateStatus={handleUpdateRequestStatus}
         currentUser={user}
+        isUpdating={isUpdatingRequest === selectedRequestId}
       />
     </div>
   );

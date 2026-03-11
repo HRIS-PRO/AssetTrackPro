@@ -25,6 +25,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
 }) => {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
+  const [selectedLocationFilter, setSelectedLocationFilter] = useState('All');
   const [isAdding, setIsAdding] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -34,7 +35,6 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   const [viewingAssetId, setViewingAssetId] = useState<string | null>(null);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [assetTab, setAssetTab] = useState<'ALL' | 'PENDING_ME'>('ALL');
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   // Bulk Ops Modal State
   const [isBulkDecommissioning, setIsBulkDecommissioning] = useState(false);
@@ -54,6 +54,13 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   const [isBulkAssigningModalOpen, setIsBulkAssigningModalOpen] = useState(false);
   const [bulkAssignUserSearch, setBulkAssignUserSearch] = useState('');
   const [isBulkAssigning, setIsBulkAssigning] = useState(false);
+
+  // Super Admin Reassign/Decommission State
+  const [isReassigningAssetId, setIsReassigningAssetId] = useState<string | null>(null);
+  const [reassignUserSearch, setReassignUserSearch] = useState('');
+  const [isSubmittingReassign, setIsSubmittingReassign] = useState(false);
+  const [isDecommissioningAssetId, setIsDecommissioningAssetId] = useState<string | null>(null);
+  const [isSubmittingDecommission, setIsSubmittingDecommission] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -136,7 +143,8 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
     return (
       (a.name.toLowerCase().includes(query) || a.id.toLowerCase().includes(query)) &&
       (selectedCategoryFilter === 'All' || a.category === selectedCategoryFilter) &&
-      (selectedStatusFilter === 'All' || a.status === selectedStatusFilter)
+      (selectedStatusFilter === 'All' || a.status === selectedStatusFilter) &&
+      (selectedLocationFilter === 'All' || a.location === selectedLocationFilter)
     );
   });
 
@@ -174,6 +182,15 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       (u.name || '').toLowerCase().includes(bulkAssignUserSearch.toLowerCase())
     );
   }, [bulkAssignUserSearch, allEmployees, team]);
+
+  const filteredReassignUsers = useMemo(() => {
+    const listToSearch = allEmployees.length > 0 ? allEmployees : team;
+    if (!reassignUserSearch) return listToSearch;
+    return listToSearch.filter(u =>
+      (u.firstName + ' ' + u.surname).toLowerCase().includes(reassignUserSearch.toLowerCase()) ||
+      (u.name || '').toLowerCase().includes(reassignUserSearch.toLowerCase())
+    );
+  }, [reassignUserSearch, allEmployees, team]);
 
   const selectedTotalValue = useMemo(() => {
     return assets
@@ -448,6 +465,96 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
     }
   };
 
+  const handleReassign = async (userToAssign: any) => {
+    if (!isReassigningAssetId) return;
+    setIsSubmittingReassign(true);
+
+    const deptName = userToAssign.department?.name || userToAssign.department || 'Unknown';
+    let managerName = '';
+    let finalDeptName = deptName;
+
+    const uDeptId = userToAssign.department?.id || userToAssign.department;
+    const uDeptName = userToAssign.department?.name || userToAssign.department;
+
+    const fullDept = allDepartments.find(d => d.id === uDeptId || d.name === uDeptName);
+    if (fullDept) {
+      finalDeptName = fullDept.name;
+      if (fullDept.head?.name && fullDept.head?.name !== 'Unassigned') {
+        managerName = fullDept.head.name;
+      } else if (fullDept.headName && fullDept.headName !== 'Unassigned') {
+        managerName = fullDept.headName;
+      }
+    }
+
+    if (!managerName && userToAssign.hiringManagerId) {
+      const mgr = allEmployees.find(emp => emp.userId === userToAssign.hiringManagerId || emp.id === userToAssign.hiringManagerId);
+      if (mgr) {
+        managerName = mgr.firstName ? `${mgr.firstName} ${mgr.surname}` : mgr.name;
+      } else {
+        managerName = userToAssign.hiringManagerId;
+      }
+    }
+
+    const payload = {
+      assignedTo: userToAssign.userId || userToAssign.id,
+      manager: managerName,
+      department: finalDeptName
+    };
+
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const res = await fetch(`/api/assets/${isReassigningAssetId}/reassign`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const updatedAsset = await res.json();
+        setAssets(prev => prev.map(a => a.id === isReassigningAssetId ? updatedAsset : a));
+        setIsReassigningAssetId(null);
+        setReassignUserSearch('');
+      } else {
+        const err = await res.json();
+        alert(`Failed to reassign asset: ${err.message || res.statusText}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error reassigning asset");
+    } finally {
+      setIsSubmittingReassign(false);
+    }
+  };
+
+  const handleDecommission = async () => {
+    if (!isDecommissioningAssetId) return;
+    setIsSubmittingDecommission(true);
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const res = await fetch(`/api/assets/${isDecommissioningAssetId}/decommission`, {
+        method: 'PUT',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      if (res.ok) {
+        const updatedAsset = await res.json();
+        setAssets(prev => prev.map(a => a.id === isDecommissioningAssetId ? updatedAsset : a));
+        setIsDecommissioningAssetId(null);
+      } else {
+        const err = await res.json();
+        alert(`Failed to decommission asset: ${err.message || res.statusText}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error decommissioning asset");
+    } finally {
+      setIsSubmittingDecommission(false);
+    }
+  };
+
   const validate = (type?: 'another' | 'consent') => {
     const newErrors: Record<string, boolean> = {};
     const required = ['name', 'category', 'serialNumber', 'purchasePrice'];
@@ -525,24 +632,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
     }
   };
 
-  const handleReportSubmit = async (assetId: string, comment: string) => {
-    const token = localStorage.getItem('asset_track_token');
-    const res = await fetch('/api/reports', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({ assetId, comment })
-    });
-
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message || 'Failed to submit report');
-    }
-
-    alert('Report submitted successfully!');
-  };
+  // handleReportSubmit removed - using global modal from App.tsx via onReportAsset prop
 
   const getStatusColor = (status: AssetStatus) => {
     switch (status) {
@@ -554,6 +644,114 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       default: return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-400';
     }
   };
+
+  const superAdminModals = (
+    <>
+      {/* Reassign Modal */}
+      {isReassigningAssetId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsReassigningAssetId(null)}></div>
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-fade-in flex flex-col">
+            <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800/80">
+              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-2xl font-black">swap_horiz</span>
+              </div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">Reassign Asset</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 font-bold mt-1">Select a new user to assign this asset to. The current assignment will be cancelled.</p>
+            </div>
+
+            <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50 flex-1 overflow-visible">
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+                <input
+                  type="text"
+                  placeholder="Search staff to reassign..."
+                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all dark:text-white font-bold text-sm shadow-sm"
+                  value={reassignUserSearch}
+                  onChange={e => setReassignUserSearch(e.target.value)}
+                />
+              </div>
+
+              <div className="mt-4 max-h-60 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-inner">
+                {filteredReassignUsers.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 text-sm font-bold">No users found</div>
+                ) : (
+                  filteredReassignUsers.map(u => {
+                    const displayName = u.firstName ? `${u.firstName} ${u.surname}` : u.name;
+                    const deptName = u.department?.name || u.department || 'Unknown';
+                    const currentAsset = assets.find(a => a.id === isReassigningAssetId);
+                    const isAlreadyAssignedToUser = currentAsset?.assignedTo === u.userId || currentAsset?.assignedTo === u.id;
+                    return (
+                      <div
+                        key={u.id}
+                        onClick={() => !isAlreadyAssignedToUser && handleReassign(u)}
+                        className={`px-4 py-3 cursor-pointer flex items-center gap-3 border-b border-slate-100 dark:border-slate-700/50 last:border-0 transition-colors ${
+                          isSubmittingReassign || isAlreadyAssignedToUser ? 'opacity-50 pointer-events-none bg-slate-50 dark:bg-slate-900' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <img src={u.avatar || `https://ui-avatars.com/api/?name=${displayName}`} className="w-8 h-8 rounded-full object-cover" alt="" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-xs dark:text-white truncate">{displayName}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">{deptName}</p>
+                        </div>
+                        {isAlreadyAssignedToUser && <span className="text-[10px] font-black uppercase text-slate-400">Current</span>}
+                        {isSubmittingReassign && <span className="material-symbols-outlined text-slate-400 animate-spin">refresh</span>}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 md:p-8 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button
+                onClick={() => setIsReassigningAssetId(null)}
+                disabled={isSubmittingReassign}
+                className="px-6 py-2.5 rounded-xl font-bold text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors uppercase tracking-widest"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Decommission Modal */}
+      {isDecommissioningAssetId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsDecommissioningAssetId(null)}></div>
+          <div className="relative bg-white dark:bg-slate-950 w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in border border-pink-500/50 p-8 md:p-12 text-center space-y-8">
+            <div className="w-16 md:w-20 h-16 md:h-20 bg-pink-100 dark:bg-pink-900/30 text-pink-600 rounded-full flex items-center justify-center mx-auto animate-pulse">
+              <span className="material-symbols-outlined text-4xl">warning</span>
+            </div>
+            <div className="space-y-4">
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Retire Equipment</h2>
+              <p className="text-sm md:text-base text-slate-500 dark:text-slate-400 font-bold leading-relaxed">
+                <span className="text-pink-600 font-black">CAUTION.</span> You are about to decommission <span className="font-black text-slate-900 dark:text-white">{assets.find(a => a.id === isDecommissioningAssetId)?.name}</span>.
+                It will be set to unassigned and marked as retired.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleDecommission}
+                disabled={isSubmittingDecommission}
+                className="w-full h-14 flex items-center justify-center rounded-full bg-pink-600 text-white font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-pink-500/30 hover:bg-pink-500 transition-all disabled:opacity-50"
+              >
+                {isSubmittingDecommission ? <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span> : 'Confirm Retire'}
+              </button>
+              <button
+                onClick={() => setIsDecommissioningAssetId(null)}
+                disabled={isSubmittingDecommission}
+                className="w-full py-4 rounded-full border-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-white font-black uppercase text-[10px] tracking-widest hover:bg-slate-50 dark:hover:bg-slate-900 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 
   if (viewingAsset) {
     return (
@@ -637,6 +835,26 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                 <span className="material-symbols-outlined text-slate-400 group-hover:text-red-600 transition-colors">history</span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Issue</span>
               </button>
+              
+              {isSuperAdmin && viewingAsset.assignedTo && viewingAsset.status !== 'DECOMMISSIONED' && (
+                <button
+                  onClick={() => setIsReassigningAssetId(viewingAsset.id)}
+                  className="group flex flex-col items-center justify-center gap-3 p-6 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-indigo-800 rounded-3xl hover:border-indigo-600 hover:shadow-xl transition-all"
+                >
+                  <span className="material-symbols-outlined text-slate-400 group-hover:text-indigo-600 transition-colors">swap_horiz</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-indigo-600">Reassign</span>
+                </button>
+              )}
+
+              {isSuperAdmin && viewingAsset.status !== 'DECOMMISSIONED' && (
+                <button
+                  onClick={() => setIsDecommissioningAssetId(viewingAsset.id)}
+                  className="group flex flex-col items-center justify-center gap-3 p-6 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-pink-800 rounded-3xl hover:border-pink-600 hover:shadow-xl transition-all"
+                >
+                  <span className="material-symbols-outlined text-slate-400 group-hover:text-pink-600 transition-colors">delete_sweep</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-pink-600">Retire</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -690,6 +908,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
             </div>
           </div>
         </div>
+        {superAdminModals}
       </div>
     );
   }
@@ -698,83 +917,102 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   // currently filter is unused in the UI but could be hooked up later to the Header.
 
   return (
-    <div className="space-y-8 animate-fade-in relative">
-      {/* Filters & Actions */}
-      <div className="flex flex-col gap-4 bg-white dark:bg-slate-900 p-4 md:p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
-        <div className="flex flex-col md:flex-row gap-6 items-center justify-between">
+    <div className="space-y-6 animate-fade-in relative">
+      {/* Upper Action Bar */}
+      <div className="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
+        <div>
+          <h2 className="text-3xl font-black tracking-tight dark:text-white">Asset Inventory</h2>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Manage and track company hardware assets</p>
+        </div>
 
-          {/* Left Side: Dropdown Filters */}
-          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-            <div className="relative flex-1 sm:w-48 group">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 pointer-events-none transition-colors text-lg">category</span>
-              <select
-                className="w-full pl-12 pr-10 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 font-bold text-xs dark:text-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all cursor-pointer appearance-none shadow-sm"
-                value={selectedCategoryFilter}
-                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-              >
-                <option value="All">All Categories</option>
-                {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
-              <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">expand_more</span>
-            </div>
+        <div className="flex flex-wrap gap-3 w-full lg:w-auto">
+          {canExportAndSeeUsers && (
+            <button
+              onClick={handleExportInventory}
+              disabled={isExporting}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all hover:bg-slate-50 dark:hover:bg-slate-800 shadow-sm ${isExporting ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
+            >
+              <span className={`material-symbols-outlined text-sm ${isExporting ? 'animate-spin' : ''}`}>
+                {isExporting ? 'sync' : 'download'}
+              </span>
+              {isExporting ? 'Wait' : 'Export'}
+            </button>
+          )}
 
-            <div className="relative flex-1 sm:w-48 group">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 pointer-events-none transition-colors text-lg">rule</span>
-              <select
-                className="w-full pl-12 pr-10 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 font-bold text-xs dark:text-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all cursor-pointer appearance-none shadow-sm"
-                value={selectedStatusFilter}
-                onChange={(e) => setSelectedStatusFilter(e.target.value)}
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => setIsImporting(true)}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm active:scale-95"
               >
-                <option value="All">All Statuses</option>
-                {Object.values(AssetStatus).map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">expand_more</span>
-            </div>
+                <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
+                Import
+              </button>
+              <button
+                onClick={() => setIsAdding(true)}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-3.5 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/20 active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[18px]">add</span>
+                Add Asset
+              </button>
+            </>
+          )}
+
+          {assets.some(a => a.assignedTo === user.id || a.assignedTo === user?.userId) && (
+            <button
+              onClick={() => onReportAsset?.('')}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-3.5 bg-red-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-700 transition-all shadow-xl shadow-red-500/20 active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[18px]">report_problem</span>
+              Report Issue
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Filter Toolbar */}
+      <div className="bg-white dark:bg-slate-900 p-2 md:p-3 rounded-[2rem] border-[3px] border-slate-100 dark:border-slate-800 shadow-sm">
+        <div className="flex flex-col sm:flex-row gap-2">
+          {/* Category Filter */}
+          <div className="relative flex-1 group">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 pointer-events-none transition-colors text-lg">category</span>
+            <select
+              className="w-full pl-12 pr-10 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border-none font-bold text-[10px] uppercase tracking-widest dark:text-white focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer appearance-none shadow-inner"
+              value={selectedCategoryFilter}
+              onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+            >
+              <option value="All">All Categories</option>
+              {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">expand_more</span>
           </div>
 
-          {/* Right Side: Action Buttons */}
-          <div className="flex flex-wrap gap-3 w-full md:w-auto justify-end">
-            {canExportAndSeeUsers && (
-              <button
-                onClick={handleExportInventory}
-                disabled={isExporting}
-                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black text-xs uppercase tracking-widest transition-all hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm ${isExporting ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
-              >
-                <span className={`material-symbols-outlined text-sm ${isExporting ? 'animate-spin' : ''}`}>
-                  {isExporting ? 'sync' : 'download'}
-                </span>
-                {isExporting ? 'Wait' : 'Export'}
-              </button>
-            )}
+          {/* Status Filter */}
+          <div className="relative flex-1 group">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 pointer-events-none transition-colors text-lg">rule</span>
+            <select
+              className="w-full pl-12 pr-10 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border-none font-bold text-[10px] uppercase tracking-widest dark:text-white focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer appearance-none shadow-inner"
+              value={selectedStatusFilter}
+              onChange={(e) => setSelectedStatusFilter(e.target.value)}
+            >
+              <option value="All">All Statuses</option>
+              {Object.values(AssetStatus).map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">expand_more</span>
+          </div>
 
-            {isAdmin && (
-              <>
-                <button
-                  onClick={() => setIsImporting(true)}
-                  className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm active:scale-95"
-                >
-                  <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
-                  Import
-                </button>
-                <button
-                  onClick={() => setIsAdding(true)}
-                  className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 active:scale-95"
-                >
-                  <span className="material-symbols-outlined text-[18px]">add</span>
-                  Add Asset
-                </button>
-              </>
-            )}
-
-            {assets.some(a => a.assignedTo === user.id || a.assignedTo === user?.userId) && (
-              <button
-                onClick={() => setIsReportModalOpen(true)}
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-500/20 active:scale-95"
-              >
-                <span className="material-symbols-outlined text-[18px]">report_problem</span>
-                Report Issue
-              </button>
-            )}
+          {/* Location Filter */}
+          <div className="relative flex-1 group">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 pointer-events-none transition-colors text-lg">location_on</span>
+            <select
+              className="w-full pl-12 pr-10 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border-none font-bold text-[10px] uppercase tracking-widest dark:text-white focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer appearance-none shadow-inner"
+              value={selectedLocationFilter}
+              onChange={(e) => setSelectedLocationFilter(e.target.value)}
+            >
+              <option value="All">All Locations</option>
+              {assetLocations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+            </select>
+            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">expand_more</span>
           </div>
         </div>
       </div>
@@ -1122,10 +1360,12 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         </div>
       )}
 
+      {superAdminModals}
+
       {/* Stern Warning: Decommission Modal */}
       {isBulkDecommissioning && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-red-950/80 backdrop-blur-md" onClick={() => setIsBulkDecommissioning(false)}></div>
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsBulkDecommissioning(false)}></div>
           <div className="relative bg-white dark:bg-slate-950 w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in border border-red-500/50 p-8 md:p-12 text-center space-y-8">
             <div className="w-16 md:w-20 h-16 md:h-20 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mx-auto animate-pulse">
               <span className="material-symbols-outlined text-4xl">warning</span>
@@ -1794,12 +2034,6 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         </div>
       ), document.body)}
 
-      <ReportModal
-        isOpen={isReportModalOpen}
-        onClose={() => setIsReportModalOpen(false)}
-        assignedAssets={assets.filter(a => a.assignedTo === user.id || a.assignedTo === user?.userId)}
-        onSubmit={handleReportSubmit}
-      />
     </div>
   );
 };

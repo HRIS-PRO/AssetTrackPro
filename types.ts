@@ -45,14 +45,31 @@ export interface Asset {
   tags?: string[];
 }
 
+export enum RequestPriority {
+  STANDARD = 'STANDARD',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL'
+}
+
+export enum RequestStatus {
+  PENDING_HOD = 'PENDING_HOD',
+  PENDING_HOO = 'PENDING_HOO',
+  PENDING_CATEGORY_ADMIN = 'PENDING_CATEGORY_ADMIN',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED'
+}
+
 export interface EquipmentRequest {
   id: string;
   userId: string;
-  category: string;
-  priority: 'Standard' | 'High' | 'Critical';
+  categoryId: string;
+  priority: RequestPriority;
   justification: string;
-  status: 'Initiated' | 'Pending Approval' | 'Approved' | 'Rejected';
-  timestamp: string;
+  status: RequestStatus;
+  createdAt: string;
+  updatedAt: string;
+  userName?: string;
+  categoryName?: string;
 }
 
 export interface AuditCycle {
@@ -96,5 +113,6 @@ export interface AssetReport {
   updatedAt: string;
   assetName?: string;
   assetCategory?: string;
+  assetSerialNumber?: string;
   userName?: string;
 }

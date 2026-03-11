@@ -35,7 +35,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const [newDept, setNewDept] = useState('');
   const [newLoc, setNewLoc] = useState('');
   const [orgName, setOrgName] = useState('AssetTrackPro Enterprise');
-  const [orgColor, setOrgColor] = useState('#2563eb');  
+  const [orgColor, setOrgColor] = useState('#2563eb');
   const [mfaEnabled, setMfaEnabled] = useState(true);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isEditCategory, setIsEditCategory] = useState(false);
@@ -50,10 +50,10 @@ export const Settings: React.FC<SettingsProps> = ({
   const tabs = [
     { id: 'general', label: 'General', icon: 'settings_suggest' },
     { id: 'team', label: 'Team', icon: 'group' },
-    { id: 'security', label: 'Security', icon: 'security' },
+    // { id: 'security', label: 'Security', icon: 'security' },
     { id: 'taxonomy', label: 'Taxonomy', icon: 'category' },
-    { id: 'integrations', label: 'Integrations', icon: 'hub' },
-    { id: 'billing', label: 'Billing', icon: 'credit_card' },
+    // { id: 'integrations', label: 'Integrations', icon: 'hub' },
+    // { id: 'billing', label: 'Billing', icon: 'credit_card' },
   ];
 
   const sessions = [
@@ -61,6 +61,42 @@ export const Settings: React.FC<SettingsProps> = ({
     { device: 'iPhone 15 Pro', location: 'Lagos, Nigeria', ip: '192.168.1.42', status: '2 hours ago', current: false },
     { device: 'Chrome on Windows', location: 'London, UK', ip: '82.145.2.11', status: 'Yesterday', current: false },
   ];
+
+  const fetchAssetTrackerUsers = async () => {
+    try {
+      // NOTE: HRIS token or standard auth token based on the environment
+      const token = localStorage.getItem('asset_track_token') || localStorage.getItem('hris_token');
+      // @ts-ignore
+      const res = await fetch(`/api/users/apps/asset-tracker`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Map backend schema to User interface expected by the frontend
+        const mappedUsers: User[] = data.map((u: any) => ({
+          id: u.id,
+          name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email,
+          email: u.email,
+          role: u.role || 'Unassigned',
+          department: u.department || 'General',
+          location: u.location || 'HQ',
+          employeeId: `EMP-${u.id.substring(0, 6)}`,
+          avatar: `https://ui-avatars.com/api/?name=${u.firstName || 'User'}+${u.lastName || ''}&background=0D8ABC&color=fff&rounded=true`
+        }));
+        setTeam(mappedUsers);
+      }
+    } catch (err) {
+      console.error('Failed to fetch AssetTracker users', err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'team') {
+      fetchAssetTrackerUsers();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -445,9 +481,8 @@ export const Settings: React.FC<SettingsProps> = ({
           </div>
         )}
 
-        {activeTab === 'security' && (
+        {/* {activeTab === 'security' && (
           <div className="space-y-8 animate-fade-in slide-in-from-bottom-2">
-            {/* MFA Toggle */}
             <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] border-[3px] border-slate-100 dark:border-slate-800 flex items-center justify-between shadow-sm">
               <div className="flex items-center gap-6">
                 <div className="w-16 h-16 rounded-[1.5rem] bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 flex items-center justify-center">
@@ -466,7 +501,6 @@ export const Settings: React.FC<SettingsProps> = ({
               </button>
             </div>
 
-            {/* Authorized Sessions */}
             <div className="bg-white dark:bg-slate-900 rounded-[3rem] border-[3px] border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
               <div className="p-10 border-b border-slate-50 dark:border-slate-800 flex items-center gap-4">
                 <span className="material-symbols-outlined text-slate-400">key_visualizer</span>
@@ -515,11 +549,11 @@ export const Settings: React.FC<SettingsProps> = ({
               </div>
             </div>
           </div>
-        )}
+        )} */}
 
         {activeTab === 'team' && (
           <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm transition-colors animate-fade-in slide-in-from-bottom-2">
-            <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+            {/* <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <h2 className="text-2xl font-black tracking-tight dark:text-white">Team Management</h2>
               <button
                 onClick={() => setIsInviteModalOpen(true)}
@@ -527,7 +561,7 @@ export const Settings: React.FC<SettingsProps> = ({
               >
                 Invite Member
               </button>
-            </div>
+            </div> */}
             <div className="overflow-x-auto">
               <table className="w-full text-left min-w-[800px]">
                 <thead>
@@ -598,13 +632,13 @@ export const Settings: React.FC<SettingsProps> = ({
           </div>
         )}
 
-        {['integrations', 'billing'].includes(activeTab) && (
+        {/* {['integrations', 'billing'].includes(activeTab) && (
           <div className="p-20 bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800 text-center shadow-sm transition-colors animate-fade-in slide-in-from-bottom-2">
             <span className="material-symbols-outlined text-5xl text-slate-200 dark:text-slate-700 mb-4">construction</span>
             <h3 className="text-2xl font-black tracking-tight dark:text-white">Module Under Construction</h3>
             <p className="text-slate-400 dark:text-slate-500 font-bold max-w-sm mx-auto mt-2">We're building this configuration panel to bring you more granular control over your assets.</p>
           </div>
-        )}
+        )} */}
       </div>
 
       {/* Invitation Modal */}

@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { User, UserRole } from '../types';
 import { MOCK_USERS } from '../constants';
+import { ToastProvider, useToast } from './Toast';
 
 interface AuthProps {
   onLogin: (user: User) => void;
@@ -9,6 +10,7 @@ interface AuthProps {
 }
 
 export const Auth: React.FC<AuthProps> = ({ onLogin, isDarkMode }) => {
+  const { addToast } = useToast();
   const [view, setView] = useState<'signin' | 'otp' | 'forgot-password'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,16 +27,25 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, isDarkMode }) => {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }) // Assuming default or temp password for now, or add password field
+        body: JSON.stringify({ email, password })
       });
       if (response.ok) {
         setView('otp');
       } else {
-        alert('Login failed. Please check your email.');
+        const data = await response.json().catch(() => ({}));
+        addToast({
+          type: 'error',
+          title: 'Authentication Failed',
+          message: data.message || 'Incorrect email or password. Please try again.'
+        });
       }
     } catch (err) {
       console.error(err);
-      alert('Login error');
+      addToast({
+        type: 'error',
+        title: 'Connection Error',
+        message: 'Could not reach the authentication server. Please check your connection.'
+      });
     } finally {
       setIsVerifying(false);
     }
@@ -106,11 +117,19 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, isDarkMode }) => {
           localStorage.setItem('asset_track_user', JSON.stringify(appUser));
           onLogin(appUser);
         } else {
-          alert('Invalid OTP');
+          addToast({
+            type: 'error',
+            title: 'Verification Failed',
+            message: 'The code you entered is incorrect. Please check your email and try again.'
+          });
         }
       } catch (err) {
         console.error(err);
-        alert('Verification error');
+        addToast({
+          type: 'error',
+          title: 'Verification Error',
+          message: 'An error occurred during verification. Please try again later.'
+        });
       } finally {
         setIsVerifying(false);
       }

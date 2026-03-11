@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, UserRole, Asset, Activity, AssetStatus } from '../types';
+import { User, UserRole, Asset, Activity, AssetStatus, EquipmentRequest, AssetReport } from '../types';
 
 interface DashboardProps {
   user: User;
@@ -10,10 +10,14 @@ interface DashboardProps {
   activities: Activity[];
   onRequestAsset: () => void;
   onReportProblem: () => void;
+  requests: EquipmentRequest[];
+  managedRequests: EquipmentRequest[];
+  allReports: AssetReport[];
+  managedReports: AssetReport[];
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
-  user, assets: initialAssets, isDarkMode, activities, onRequestAsset, onReportProblem
+  user, assets: initialAssets, isDarkMode, activities, onRequestAsset, onReportProblem, requests, managedRequests, allReports, managedReports
 }) => {
   const [assets, setAssets] = React.useState<Asset[]>(initialAssets);
 
@@ -69,16 +73,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         },
         {
           label: 'Pending Consents',
-          value: isSuperAdmin ? 12 : 1,
+          value: assets.filter(a => a.assignedTo === user.id && a.status === AssetStatus.PENDING).length,
           icon: 'signature',
           color: 'amber',
           subText: isSuperAdmin ? 'global queue' : 'action required',
           largeIcon: 'gavel',
-          badge: isSuperAdmin ? undefined : 'Action Required'
+          badge: assets.filter(a => a.assignedTo === user.id && a.status === AssetStatus.PENDING).length > 0 ? 'Action Required' : undefined
         },
         {
           label: isSuperAdmin ? 'Pending Requests' : 'Active Requests',
-          value: isSuperAdmin ? 8 : 1,
+          value: isSuperAdmin ? managedRequests.filter(r => r.status !== 'APPROVED' && r.status !== 'REJECTED').length : requests.filter(r => r.status !== 'APPROVED' && r.status !== 'REJECTED').length,
           icon: 'confirmation_number',
           color: 'purple',
           subText: isSuperAdmin ? 'waiting approval' : 'in progress',

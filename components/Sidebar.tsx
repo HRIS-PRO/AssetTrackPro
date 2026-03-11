@@ -78,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Role Switcher */}
-        <div className={`px-4 mb-6 transition-opacity duration-300 ${!isOpen ? 'lg:opacity-0 lg:pointer-events-none hidden lg:block' : 'opacity-100'}`}>
+        {/* <div className={`px-4 mb-6 transition-opacity duration-300 ${!isOpen ? 'lg:opacity-0 lg:pointer-events-none hidden lg:block' : 'opacity-100'}`}>
           <div className="p-3 bg-white/50 dark:bg-slate-950/30 rounded-2xl space-y-1 shadow-inner border border-white/20 dark:border-white/5">
             <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 block pl-2">Preview Role</label>
             <div className="relative">
@@ -95,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[16px]">unfold_more</span>
             </div>
           </div>
-        </div>
+        </div> */}
 
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
           {filteredNav.map((item) => {

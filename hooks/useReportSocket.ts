@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { AssetReport, ReportStatus } from '../types';
 
-export type WsEventType = 'report:created' | 'report:status_updated' | 'connection:ok' | 'connection:error';
+export type WsEventType = 'report:created' | 'report:status_updated' | 'request:created' | 'request:status_updated' | 'connection:ok' | 'connection:error';
 
 export interface WsMessage {
     type: WsEventType;
@@ -13,6 +13,9 @@ interface UseReportSocketOptions {
     onReportCreated?: (report: AssetReport) => void;
     /** Called when one of the user's reports has its status updated */
     onStatusUpdated?: (data: { id: string; status: ReportStatus; assetId: string; updatedAt: string }) => void;
+    /** Equipment requests */
+    onRequestCreated?: (request: any) => void;
+    onRequestStatusUpdated?: (data: any) => void;
 }
 
 const WS_URL = (() => {
@@ -23,7 +26,7 @@ const WS_URL = (() => {
     return `${proto}//${host}:${port}/ws`;
 })();
 
-export function useReportSocket({ onReportCreated, onStatusUpdated }: UseReportSocketOptions) {
+export function useReportSocket({ onReportCreated, onStatusUpdated, onRequestCreated, onRequestStatusUpdated }: UseReportSocketOptions) {
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isMountedRef = useRef(true);
@@ -55,7 +58,11 @@ export function useReportSocket({ onReportCreated, onStatusUpdated }: UseReportS
                     case 'report:status_updated':
                         onStatusUpdated?.(msg.payload);
                         break;
-                    default:
+                    case 'request:created':
+                        onRequestCreated?.(msg.payload);
+                        break;
+                    case 'request:status_updated':
+                        onRequestStatusUpdated?.(msg.payload);
                         break;
                 }
             } catch (err) {
@@ -77,7 +84,7 @@ export function useReportSocket({ onReportCreated, onStatusUpdated }: UseReportS
             console.warn('[WS] Socket error', err);
             ws.close();
         };
-    }, [onReportCreated, onStatusUpdated]);
+    }, [onReportCreated, onStatusUpdated, onRequestCreated, onRequestStatusUpdated]);
 
     useEffect(() => {
         isMountedRef.current = true;
