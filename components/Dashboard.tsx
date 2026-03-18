@@ -20,17 +20,42 @@ export const Dashboard: React.FC<DashboardProps> = ({
   user, assets: initialAssets, isDarkMode, activities, onRequestAsset, onReportProblem, requests, managedRequests, allReports, managedReports
 }) => {
   const [assets, setAssets] = React.useState<Asset[]>(initialAssets);
+  const [activeAudit, setActiveAudit] = React.useState<any>(null);
 
   // Sync state if props change
   React.useEffect(() => {
     setAssets(initialAssets);
   }, [initialAssets]);
 
+  // Fetch active audit for the dashboard widget
+  React.useEffect(() => {
+    const fetchAudits = async () => {
+      try {
+        const token = localStorage.getItem('asset_track_token');
+        const res = await fetch('/api/audits', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const cycles = await res.json();
+          // Find the first 'In Progress' audit, or fallback to any planned/completed
+          const active = cycles.find((c: any) => c.status === 'In Progress') || cycles[0];
+          setActiveAudit(active);
+        }
+      } catch (err) {
+        console.error("Failed to fetch dashboard audits", err);
+      }
+    };
+    fetchAudits();
+  }, []);
+
   const isSuperAdmin = user.role === UserRole.SUPER_ADMIN;
   const navigate = useNavigate();
+  const [isAccepting, setIsAccepting] = React.useState<string | null>(null);
 
   // Accept Asset Logic
   const handleAcceptAsset = async (assetId: string) => {
+    if (isAccepting) return;
+    setIsAccepting(assetId);
     try {
       const token = localStorage.getItem('asset_track_token');
       const res = await fetch(`/api/assets/${assetId}/accept`, {
@@ -46,6 +71,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     } catch (err) {
       console.error(err);
       alert('Network error while accepting asset.');
+    } finally {
+      setIsAccepting(null);
     }
   };
 
@@ -203,10 +230,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-black uppercase rounded-lg">Review</span>
                     </div>
                     <button
+                      disabled={isAccepting === asset.id}
                       onClick={() => handleAcceptAsset(asset.id)}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs tracking-widest uppercase rounded-xl transition-all shadow-md shadow-blue-500/20"
+                      className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs tracking-widest uppercase rounded-xl transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      Accept Asset
+                      {isAccepting === asset.id && <span className="material-symbols-outlined text-[14px] animate-spin flex-shrink-0">sync</span>}
+                      {isAccepting === asset.id ? 'Accepting...' : 'Accept Asset'}
                     </button>
                   </div>
                 ))}
@@ -214,36 +243,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           )}
 
-          <div className="bg-slate-900 dark:bg-slate-800 rounded-[2.5rem] p-8 text-white relative overflow-hidden group shadow-2xl">
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-6">
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">
-                  {isSuperAdmin ? 'System Audit Active' : 'Your Verification Required'}
-                </span>
-              </div>
-              <h3 className="text-3xl font-black tracking-tight mb-2">Q4 Annual Audit</h3>
-              <p className="text-sm text-slate-300 mb-8 leading-relaxed">
-                {isSuperAdmin ? '75% of items verified across 12 departments.' : 'Complete verification for your 3 assigned assets.'}
-              </p>
-              <div className="space-y-3 mb-8">
-                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 w-3/4 shadow-[0_0_10px_#3b82f6]"></div>
+          {activeAudit && (
+            <div className="bg-slate-900 dark:bg-slate-800 rounded-[2.5rem] p-8 text-white relative overflow-hidden group shadow-2xl">
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-6">
+                  {activeAudit.status === 'In Progress' && (
+                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                  )}
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">
+                    {activeAudit.status === 'In Progress' ? (isSuperAdmin ? 'System Audit Active' : 'Your Verification Required') : 'Audit Status'}
+                  </span>
                 </div>
-                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  <span>Progress</span>
-                  <span>75%</span>
+                <h3 className="text-3xl font-black tracking-tight mb-2">{activeAudit.name}</h3>
+                <p className="text-sm text-slate-300 mb-8 leading-relaxed">
+                  {isSuperAdmin ? `${activeAudit.completion}% of items verified globally.` : `Audit cycle ID: ${activeAudit.displayId || activeAudit.id}`}
+                </p>
+                <div className="space-y-3 mb-8">
+                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500 shadow-[0_0_10px_#3b82f6]" style={{ width: `${activeAudit.completion}%` }}></div>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <span>Progress</span>
+                    <span>{activeAudit.completion}%</span>
+                  </div>
                 </div>
+                <button
+                  onClick={() => navigate('/audits')}
+                  className="w-full py-4 bg-white text-slate-900 rounded-2xl font-black text-sm tracking-tight hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
+                >
+                  {isSuperAdmin ? 'View Audit Analytics' : 'Resume My Audit'}
+                </button>
               </div>
-              <button
-                onClick={() => navigate('/audits')}
-                className="w-full py-4 bg-white text-slate-900 rounded-2xl font-black text-sm tracking-tight hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
-              >
-                {isSuperAdmin ? 'View Audit Analytics' : 'Resume My Audit'}
-              </button>
+              <span className="material-symbols-outlined text-[10rem] absolute -right-8 -top-4 text-white/5 pointer-events-none group-hover:rotate-12 transition-all duration-700">fact_check</span>
             </div>
-            <span className="material-symbols-outlined text-[10rem] absolute -right-8 -top-4 text-white/5 pointer-events-none group-hover:rotate-12 transition-all duration-700">fact_check</span>
-          </div>
+          )}
 
           {!isSuperAdmin && (
             <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 shadow-sm space-y-6">

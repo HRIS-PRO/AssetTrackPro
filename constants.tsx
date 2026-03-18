@@ -115,11 +115,11 @@ export const MOCK_ASSETS: Asset[] = [
 ];
 
 export const MOCK_ACTIVITIES: Activity[] = [
-  { id: 1, type: 'assignment', title: 'New Asset Assigned: MacBook Pro 16" M2', desc: 'Review condition and provide consent.', time: '2h ago', icon: 'laptop_mac', color: 'blue', roles: [UserRole.USER, UserRole.SUPER_ADMIN, UserRole.ADMIN_USER], hasCTA: true, targetUserId: 'u4', assetId: 'AST-001', isRead: false },
-  { id: 2, type: 'maintenance', title: 'Maintenance Request Updated', desc: 'Status changed to "In Repair".', time: '1d ago', icon: 'build', color: 'slate', roles: [UserRole.USER, UserRole.SUPER_ADMIN, UserRole.ADMIN_USER], targetUserId: 'u4', isRead: false },
-  { id: 3, type: 'audit', title: 'Audit Verification Successful', desc: 'Verification recorded for Dell UltraSharp 27".', time: 'Oct 10', icon: 'fact_check', color: 'green', roles: [UserRole.USER, UserRole.AUDITOR, UserRole.SUPER_ADMIN], targetUserId: 'u4', isRead: true },
-  { id: 4, type: 'system', title: 'Global Data Sync', desc: 'Enterprise assets synchronized with HRIS.', time: '3d ago', icon: 'security', color: 'purple', roles: [UserRole.SUPER_ADMIN], isRead: false },
-  { id: 5, type: 'audit_log', title: 'Bulk Inventory Import', desc: 'Sarah Chen added 45 new items.', time: '1w ago', icon: 'cloud_download', color: 'blue', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN_USER], isRead: true }
+  { id: '1', type: 'assignment', title: 'New Asset Assigned: MacBook Pro 16" M2', desc: 'Review condition and provide consent.', time: '2h ago', icon: 'laptop_mac', color: 'blue', roles: [UserRole.USER, UserRole.SUPER_ADMIN, UserRole.ADMIN_USER], hasCTA: true, targetUserId: 'u4', assetId: 'AST-001', isRead: false },
+  { id: '2', type: 'maintenance', title: 'Maintenance Request Updated', desc: 'Status changed to "In Repair".', time: '1d ago', icon: 'build', color: 'slate', roles: [UserRole.USER, UserRole.SUPER_ADMIN, UserRole.ADMIN_USER], targetUserId: 'u4', isRead: false },
+  { id: '3', type: 'audit', title: 'Audit Verification Successful', desc: 'Verification recorded for Dell UltraSharp 27".', time: 'Oct 10', icon: 'fact_check', color: 'green', roles: [UserRole.USER, UserRole.AUDITOR, UserRole.SUPER_ADMIN], targetUserId: 'u4', isRead: true },
+  { id: '4', type: 'system', title: 'Global Data Sync', desc: 'Enterprise assets synchronized with HRIS.', time: '3d ago', icon: 'security', color: 'purple', roles: [UserRole.SUPER_ADMIN], isRead: false },
+  { id: '5', type: 'audit_log', title: 'Bulk Inventory Import', desc: 'Sarah Chen added 45 new items.', time: '1w ago', icon: 'cloud_download', color: 'blue', roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN_USER], isRead: true }
 ];
 
 export const DEPARTMENTS = ['Engineering', 'Marketing', 'Operations', 'Finance', 'Human Resources', 'Legal', 'Sales'];

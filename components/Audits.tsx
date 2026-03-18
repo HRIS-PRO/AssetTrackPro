@@ -1,6 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
-import { User, UserRole, Asset, AuditCycle, AssetStatus } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { User, UserRole, Asset, AuditCycle, AssetStatus, VerificationStatus } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 
 interface AuditsProps {
@@ -8,19 +8,8 @@ interface AuditsProps {
   assets: Asset[];
 }
 
-interface VerificationStatus {
-  assetId: string;
-  cycleId: string;
-  result: 'Verified' | 'Missing' | 'Damaged' | 'Unclear' | null;
-  notes: string;
-  timestamp: string;
-}
-
 export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
-  const [auditCycles, setAuditCycles] = useState<AuditCycle[]>([
-    { id: 'AUD-2024-Q4', name: 'Q4 Annual Asset Audit', startDate: '2024-10-01', endDate: '2024-10-31', status: 'In Progress', auditors: ['u1', 'u3'], completion: 75 },
-    { id: 'AUD-2024-Q3', name: 'Q3 Maintenance Check', startDate: '2024-07-01', endDate: '2024-07-31', status: 'Completed', auditors: ['u3'], completion: 100 },
-  ]);
+  const [auditCycles, setAuditCycles] = useState<AuditCycle[]>([]);
 
   const [activeCycle, setActiveCycle] = useState<AuditCycle | null>(null);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -30,6 +19,7 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [currentNotes, setCurrentNotes] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [auditView, setAuditView] = useState<'mine'|'all'>('mine');
 
   // New Audit Form State
   const [newAudit, setNewAudit] = useState({
@@ -37,6 +27,12 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
     startDate: new Date().toISOString().split('T')[0],
     endDate: '',
   });
+  
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isCreatingAudit, setIsCreatingAudit] = useState(false);
+
+  // Noltfinance123!
+  // lmsdatabase123@
 
   // Permissions Logic
   const isSuperAdmin = user.role === UserRole.SUPER_ADMIN;
@@ -44,7 +40,34 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
   const isAdminUser = user.role === UserRole.ADMIN_USER;
   const isStandardUser = user.role === UserRole.USER;
 
+  useEffect(() => {
+    const fetchAudits = async () => {
+      try {
+        const token = localStorage.getItem('asset_track_token');
+        const res = await fetch('/api/audits', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAuditCycles(data);
+          
+          const allVerifications: VerificationStatus[] = [];
+          data.forEach((cycle: any) => {
+            if (cycle.verifications) {
+              allVerifications.push(...cycle.verifications);
+            }
+          });
+          setVerificationResults(allVerifications);
+        }
+      } catch (err) {
+        console.error("Failed to fetch audits", err);
+      }
+    };
+    fetchAudits();
+  }, []);
+
   const canStartAudit = isSuperAdmin || isAuditor;
+  const hasActiveAudit = auditCycles.some(c => c.status === 'In Progress');
   const canFinishAudit = isSuperAdmin || isAuditor;
   const canExportAudit = isSuperAdmin || isAuditor;
   const canViewCompletedAudits = isSuperAdmin || isAuditor || isAdminUser;
@@ -57,7 +80,7 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
 
   const verificationAssets = useMemo(() => {
     let base = assets;
-    if (isStandardUser) {
+    if (auditView === 'mine') {
       base = assets.filter(a => a.assignedTo === user.id);
     }
     if (searchTerm) {
@@ -67,7 +90,7 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
       );
     }
     return base;
-  }, [assets, isStandardUser, user.id, searchTerm]);
+  }, [assets, auditView, user.id, searchTerm]);
 
   const selectedAsset = useMemo(() => {
     const id = selectedAssetId || (verificationAssets.length > 0 ? verificationAssets[0].id : null);
@@ -79,54 +102,79 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
     return verificationResults.find(r => r.assetId === selectedAsset.id && r.cycleId === activeCycle.id);
   }, [verificationResults, selectedAsset, activeCycle]);
 
-  const handleVerifyAction = (result: VerificationStatus['result']) => {
-    if (!activeCycle || !selectedAsset) return;
+  const handleVerifyAction = async (result: VerificationStatus['result']) => {
+    if (!activeCycle || !selectedAsset || !result || isVerifying) return;
+    setIsVerifying(true);
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const res = await fetch(`/api/audits/${activeCycle.id}/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ assetId: selectedAsset.id, result, notes: currentNotes })
+      });
+      
+      if (!res.ok) throw new Error("Verification failed.");
+      
+      const newResult = await res.json();
 
-    const newResult: VerificationStatus = {
-      assetId: selectedAsset.id,
-      cycleId: activeCycle.id,
-      result,
-      notes: currentNotes,
-      timestamp: new Date().toLocaleString(),
-    };
+      setVerificationResults(prev => {
+        const filtered = prev.filter(r => !(r.assetId === selectedAsset.id && r.cycleId === activeCycle.id));
+        return [...filtered, newResult];
+      });
 
-    setVerificationResults(prev => {
-      const filtered = prev.filter(r => !(r.assetId === selectedAsset.id && r.cycleId === activeCycle.id));
-      return [...filtered, newResult];
-    });
+      // Update cycle completion visually (simplified)
+      const cycleIdx = auditCycles.findIndex(c => c.id === activeCycle.id);
+      if (cycleIdx > -1) {
+        const updatedCycles = [...auditCycles];
+        const cycleResultsCount = verificationResults.filter(r => r.cycleId === activeCycle.id && r.assetId !== selectedAsset.id).length + 1;
+        updatedCycles[cycleIdx].completion = Math.round((cycleResultsCount / (verificationAssets.length || 1)) * 100);
+        setAuditCycles(updatedCycles);
+      }
 
-    // Update cycle completion visually (simplified)
-    const cycleIdx = auditCycles.findIndex(c => c.id === activeCycle.id);
-    if (cycleIdx > -1) {
-      const updatedCycles = [...auditCycles];
-      const cycleResultsCount = verificationResults.filter(r => r.cycleId === activeCycle.id).length + 1;
-      updatedCycles[cycleIdx].completion = Math.round((cycleResultsCount / verificationAssets.length) * 100);
-      setAuditCycles(updatedCycles);
-    }
-
-    // Automatically highlight next asset
-    const currentIndex = verificationAssets.findIndex(a => a.id === selectedAsset.id);
-    if (currentIndex < verificationAssets.length - 1) {
-      setSelectedAssetId(verificationAssets[currentIndex + 1].id);
-      setCurrentNotes('');
+      // Automatically highlight next asset
+      const currentIndex = verificationAssets.findIndex(a => a.id === selectedAsset.id);
+      if (currentIndex < verificationAssets.length - 1) {
+        setSelectedAssetId(verificationAssets[currentIndex + 1].id);
+        setCurrentNotes('');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
-  const handleCreateAudit = (e: React.FormEvent) => {
+  const handleCreateAudit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const id = `AUD-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000)}`;
-    const cycle: AuditCycle = {
-      id,
-      name: newAudit.name,
-      startDate: newAudit.startDate,
-      endDate: newAudit.endDate,
-      status: 'In Progress',
-      auditors: [user.id],
-      completion: 0
-    };
-    setAuditCycles(prev => [cycle, ...prev]);
-    setIsCreateModalOpen(false);
-    setNewAudit({ name: '', startDate: new Date().toISOString().split('T')[0], endDate: '' });
+    if (isCreatingAudit) return;
+    setIsCreatingAudit(true);
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const res = await fetch('/api/audits', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(newAudit)
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to create audit cycle");
+      }
+      const cycle: AuditCycle = await res.json();
+      setAuditCycles(prev => [cycle, ...prev]);
+      setIsCreateModalOpen(false);
+      setNewAudit({ name: '', startDate: new Date().toISOString().split('T')[0], endDate: '' });
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Error creating audit');
+    } finally {
+      setIsCreatingAudit(false);
+    }
   };
 
   const auditPerformanceData = useMemo(() => {
@@ -163,7 +211,7 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `audit_report_${selectedAuditToExport?.id}.csv`);
+    link.setAttribute("download", `audit_report_${selectedAuditToExport?.displayId || selectedAuditToExport?.id}.csv`);
     document.body.appendChild(link);
     link.click();
     setIsExportModalOpen(false);
@@ -202,8 +250,18 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
                 <span className="material-symbols-outlined">qr_code_scanner</span>
                 Scan Barcode
               </button>
+              <div className="flex items-center justify-between mb-4">
+                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Assigned Assets</p>
+                 {!isStandardUser && (
+                   <button 
+                     onClick={() => setAuditView(v => v === 'mine' ? 'all' : 'mine')}
+                     className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-full transition-all"
+                   >
+                     {auditView === 'mine' ? 'Show All Company Assets' : 'Show Only My Assets'}
+                   </button>
+                 )}
+              </div>
               <div className="space-y-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Inventory Search</p>
                 <input 
                   type="text" 
                   placeholder="Search item..." 
@@ -266,15 +324,23 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
                   ].map(btn => (
                     <button 
                       key={btn.label} 
+                      disabled={isVerifying}
                       onClick={() => handleVerifyAction(btn.result)}
-                      className={`flex flex-col items-center gap-3 p-8 rounded-[2rem] border-2 transition-all hover:scale-105 ${
+                      className={`flex flex-col items-center gap-3 p-8 rounded-[2rem] border-2 transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 ${
                         currentResult?.result === btn.result 
                         ? `border-${btn.color}-600 bg-${btn.color}-50 dark:bg-${btn.color}-900/10 text-${btn.color}-600 dark:text-${btn.color}-400` 
                         : 'border-slate-100 dark:border-slate-700 text-slate-400 dark:text-slate-600 bg-transparent'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-3xl">{btn.icon}</span>
-                      <span className="font-black text-[10px] uppercase tracking-widest">{btn.label}</span>
+                      {isVerifying && currentResult?.result === btn.result ? (
+                        <span className="material-symbols-outlined animation-spin text-3xl">sync</span>
+                      ) : (
+                        <span className="material-symbols-outlined text-3xl">{btn.icon}</span>
+                      )}
+                      
+                      <span className="font-black text-[10px] uppercase tracking-widest">
+                        {isVerifying && currentResult?.result === btn.result ? 'Processing...' : btn.label}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -328,7 +394,7 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
             <h2 className="text-4xl font-black tracking-tighter dark:text-white">Audit Hub</h2>
             <p className="text-slate-400 font-bold">Manage system-wide asset verification cycles.</p>
           </div>
-          {canStartAudit && (
+          {canStartAudit && !hasActiveAudit && (
             <button 
               onClick={() => setIsCreateModalOpen(true)}
               className="bg-blue-600 text-white px-8 py-4 rounded-full font-black tracking-tight shadow-xl shadow-blue-500/20 transition-all hover:scale-105 active:scale-95"
@@ -391,7 +457,7 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
                       {cycle.status}
                     </span>
                     <h3 className="text-2xl font-black tracking-tight mt-4 dark:text-white leading-tight">{cycle.name}</h3>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">{cycle.id}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">{cycle.displayId || cycle.id}</p>
                   </div>
                   {canExportAudit && (
                     <button onClick={() => handleExport(cycle)} className="w-12 h-12 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-blue-600 hover:text-white transition-all shadow-sm">
@@ -414,7 +480,7 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
              <div className="col-span-full py-20 bg-white dark:bg-slate-900 rounded-[3rem] border border-dashed border-slate-200 dark:border-slate-800 text-center">
                 <span className="material-symbols-outlined text-5xl text-slate-200 dark:text-slate-800 mb-4">event_busy</span>
                 <p className="text-slate-400 font-bold max-w-sm mx-auto">No active audit cycles. A Super Admin or Auditor must start one before verification can begin.</p>
-                {canStartAudit && (
+                {canStartAudit && !hasActiveAudit && (
                   <button onClick={() => setIsCreateModalOpen(true)} className="mt-6 text-blue-600 font-black uppercase text-xs tracking-[0.2em] hover:underline transition-all underline-offset-8">Create First Cycle Now</button>
                 )}
              </div>
@@ -469,8 +535,11 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
                   </div>
                 </div>
                 <div className="p-10 bg-slate-50 dark:bg-slate-800/50 flex gap-4">
-                  <button type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 rounded-full font-black tracking-tight border-2 border-slate-200 dark:border-slate-700 dark:text-white hover:bg-slate-100 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-4 rounded-full bg-blue-600 text-white font-black tracking-tight shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all">Initiate Cycle</button>
+                  <button disabled={isCreatingAudit} type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 rounded-full font-black tracking-tight border-2 border-slate-200 dark:border-slate-700 dark:text-white hover:bg-slate-100 transition-colors disabled:opacity-50">Cancel</button>
+                  <button disabled={isCreatingAudit} type="submit" className="flex-1 py-4 rounded-full bg-blue-600 text-white font-black tracking-tight shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                    {isCreatingAudit && <span className="material-symbols-outlined animate-spin text-lg">sync</span>}
+                    {isCreatingAudit ? 'Initiating...' : 'Initiate Cycle'}
+                  </button>
                 </div>
               </form>
             </div>

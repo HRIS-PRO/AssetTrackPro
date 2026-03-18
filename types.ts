@@ -72,18 +72,30 @@ export interface EquipmentRequest {
   categoryName?: string;
 }
 
+export interface VerificationStatus {
+  id?: string;
+  assetId: string;
+  cycleId: string;
+  result: 'Verified' | 'Missing' | 'Damaged' | 'Unclear' | null;
+  notes: string;
+  verifiedAt?: string;
+  timestamp?: string; // Frontend compatibility
+}
+
 export interface AuditCycle {
   id: string;
+  displayId?: string;
   name: string;
   startDate: string;
   endDate: string;
   status: 'Planned' | 'In Progress' | 'Completed';
   auditors: string[]; // User IDs
   completion: number;
+  verifications?: VerificationStatus[];
 }
 
 export interface Activity {
-  id: number;
+  id: string;
   type: string;
   title: string;
   desc: string;

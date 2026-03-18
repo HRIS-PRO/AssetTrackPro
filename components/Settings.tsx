@@ -398,10 +398,10 @@ export const Settings: React.FC<SettingsProps> = ({
                 </div>
                 <button
                   onClick={handleAddCategory}
-                  disabled={!newCat}
+                  disabled={!newCat || isEditCategory}
                   className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-blue-500 shadow-xl shadow-blue-500/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  <span className="material-symbols-outlined text-sm font-black">add_circle</span>
+                  {isEditCategory ? <span className="material-symbols-outlined text-sm font-black animate-spin">sync</span> : <span className="material-symbols-outlined text-sm font-black">add_circle</span>}
                   {isEditCategory ? 'Registering...' : 'Register Asset Category'}
                 </button>
               </div>
@@ -472,8 +472,10 @@ export const Settings: React.FC<SettingsProps> = ({
                 />
                 <button
                   onClick={handleAddLocation}
-                  className="px-8 py-4 bg-emerald-600 text-white rounded-full font-black text-xs uppercase tracking-widest hover:bg-emerald-500 shadow-xl shadow-emerald-500/20 transition-all active:scale-95"
+                  disabled={!newLoc || isEditLocation}
+                  className="px-8 py-4 bg-emerald-600 text-white rounded-full font-black text-xs uppercase tracking-widest hover:bg-emerald-500 shadow-xl shadow-emerald-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {isEditLocation ? <span className="material-symbols-outlined text-sm animate-spin">sync</span> : null}
                   {isEditLocation ? 'Adding...' : 'Add Entry'}
                 </button>
               </div>

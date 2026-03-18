@@ -2,7 +2,7 @@
 import React, { useState, useLayoutEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { UserRole, User, Asset, Activity, EquipmentRequest, AssetReport } from './types';
-import { MOCK_USERS, MOCK_ASSETS, CATEGORIES, DEPARTMENTS, MOCK_ACTIVITIES } from './constants';
+import { MOCK_USERS, MOCK_ASSETS, CATEGORIES, DEPARTMENTS } from './constants';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
@@ -94,11 +94,12 @@ const AppContent: React.FC = () => {
         const token = localStorage.getItem('asset_track_token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const [catRes, locRes, saRes, deptRes] = await Promise.all([
+        const [catRes, locRes, saRes, deptRes, teamRes] = await Promise.all([
           fetch('/api/asset-categories', { headers }),
           fetch('/api/asset-locations', { headers }),
           fetch('/api/users/super-admins', { headers }),
-          fetch('/api/departments', { headers })
+          fetch('/api/departments', { headers }),
+          fetch('/api/users/apps/asset-tracker', { headers })
         ]);
 
         if (catRes.ok) {
@@ -117,6 +118,28 @@ const AppContent: React.FC = () => {
           const depts = await deptRes.json();
           setDepartments(depts.map((d: any) => ({ id: d.id, name: d.name })));
         }
+        if (teamRes.ok) {
+          const rawTeam = await teamRes.json();
+          const mappedTeam: User[] = rawTeam.map((u: any) => {
+            const roleMap: Record<string, UserRole> = {
+              'Super Admin': UserRole.SUPER_ADMIN,
+              'Admin User': UserRole.ADMIN_USER,
+              'Auditor': UserRole.AUDITOR,
+              'Standard User': UserRole.USER
+            };
+            return {
+              id: u.id,
+              name: (u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.email.split('@')[0]),
+              email: u.email,
+              role: roleMap[u.role] || UserRole.USER,
+              department: u.department || 'General',
+              avatar: `https://ui-avatars.com/api/?name=${u.email}&background=random`,
+              employeeId: 'EMP-001',
+              location: u.location || 'Remote'
+            };
+          });
+          setTeam(mappedTeam);
+        }
       } catch (err) {
         console.error("Failed to fetch metadata", err);
       }
@@ -134,6 +157,21 @@ const AppContent: React.FC = () => {
         if (managedRes.ok) setManagedRequests(await managedRes.json());
       } catch (err) {
         console.error("Failed to fetch requests", err);
+      }
+    };
+
+    const fetchActivities = async () => {
+      try {
+        const token = localStorage.getItem('asset_track_token');
+        const res = await fetch('/api/activities', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const acts = await res.json();
+          setActivities(acts);
+        }
+      } catch (err) {
+        console.error("Failed to fetch activities", err);
       }
     };
 
@@ -157,6 +195,7 @@ const AppContent: React.FC = () => {
       fetchMetadata();
       fetchRequests();
       fetchReportsData();
+      fetchActivities();
     }
   }, [user]);
 

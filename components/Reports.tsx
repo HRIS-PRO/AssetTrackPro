@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, Asset, AssetStatus, UserRole } from '../types';
 
 interface ReportsProps {
@@ -20,12 +20,47 @@ export const Reports: React.FC<ReportsProps> = ({ user, assets, categories, depa
 
   const isAdmin = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.AUDITOR;
 
+  const [auditData, setAuditData] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchAudits = async () => {
+      try {
+        const token = localStorage.getItem('asset_track_token');
+        const res = await fetch('/api/audits', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAuditData(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch audits", err);
+      }
+    };
+    fetchAudits();
+  }, []);
+
+  const complianceScore = useMemo(() => {
+    if (auditData.length === 0 || assets.length === 0) return '0%';
+    
+    // Use the most recently created audit that has verifications
+    const sortedAudits = [...auditData].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const latestAudit = sortedAudits.find(a => a.verifications && a.verifications.length > 0);
+    
+    if (!latestAudit) return '0%';
+
+    const verifiedCount = latestAudit.verifications.filter((v: any) => v.result === 'Verified').length;
+    // Calculate against total assets at the time, or current assets
+    const score = Math.round((verifiedCount / assets.length) * 100);
+    return `${score}%`;
+  }, [auditData, assets]);
+
   const kpis = useMemo(() => {
     const totalVal = assets.reduce((sum, a) => sum + a.purchasePrice, 0);
     const decommissioned = assets.filter(a => a.status === AssetStatus.DECOMMISSIONED || a.status === AssetStatus.LOST).length;
     return [
       { label: 'TOTAL INVENTORY VALUE', value: new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(totalVal), icon: 'payments', color: 'blue' },
-      { label: 'COMPLIANCE SCORE', value: '94%', icon: 'verified_user', color: 'green' },
+      { label: 'COMPLIANCE SCORE', value: complianceScore, icon: 'verified_user', color: 'green' },
       { label: 'TOTAL ASSETS', value: assets.length, icon: 'inventory', color: 'purple' },
       { label: 'DECOMMISSIONED', value: decommissioned, icon: 'delete_forever', color: 'red' },
     ];
@@ -185,7 +220,64 @@ export const Reports: React.FC<ReportsProps> = ({ user, assets, categories, depa
 
           {/* Download Button */}
           <button
-            onClick={() => { setIsExporting(true); setTimeout(() => { setIsExporting(false); alert('Report downloaded.'); }, 1500); }}
+            onClick={() => { 
+              setIsExporting(true); 
+              
+              try {
+                // 1. Define Headers
+                const headers = [
+                  'ID', 'Asset Name', 'Category', 'Department', 'Status', 
+                  'Purchase Date', 'Purchase Price (₦)', 'Condition', 'Location', 
+                  'Manager', 'Description', 'Model Number', 'Serial Number'
+                ];
+                
+                // 2. Map data
+                const csvRows = [headers.join(',')];
+                
+                filteredData.forEach(asset => {
+                  const values = [
+                    asset.id,
+                    `"${(asset.name || '').replace(/"/g, '""')}"`,
+                    `"${(asset.category || '').replace(/"/g, '""')}"`,
+                    `"${(asset.department || '').replace(/"/g, '""')}"`,
+                    asset.status,
+                    asset.purchaseDate,
+                    asset.purchasePrice, // Formatted as raw number, header says Naira
+                    `"${(asset.condition || '').replace(/"/g, '""')}"`,
+                    `"${(asset.location || '').replace(/"/g, '""')}"`,
+                    `"${(asset.manager || '').replace(/"/g, '""')}"`,
+                    `"${(asset.description || '').replace(/"/g, '""')}"`,
+                    `"${(asset.modelNumber || '').replace(/"/g, '""')}"`,
+                    `"${(asset.serialNumber || '').replace(/"/g, '""')}"`
+                  ];
+                  csvRows.push(values.join(','));
+                });
+                
+                // 3. Create Blob and Download URL
+                const csvString = csvRows.join('\n');
+                const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                
+                // 4. Trigger Download
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                
+                const dateSuffix = new Date().toISOString().split('T')[0];
+                const filename = reportType === 'inventory' 
+                    ? `inventory-report-${dateSuffix}.csv` 
+                    : `compliance-audit-${dateSuffix}.csv`;
+                    
+                link.setAttribute('download', filename);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              } catch (error) {
+                console.error("Export failed", error);
+                alert("Failed to export report.");
+              } finally {
+                setIsExporting(false); 
+              }
+            }}
             disabled={isExporting}
             className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/30 hover:shadow-blue-500/40 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:translate-y-0"
           >
