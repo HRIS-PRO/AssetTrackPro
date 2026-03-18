@@ -22,12 +22,16 @@ export const Reports: React.FC<ReportsProps> = ({ user, assets, categories, depa
 
   const [auditData, setAuditData] = useState<any[]>([]);
 
+  const [isLoadingAudits, setIsLoadingAudits] = useState(true);
+
   useEffect(() => {
     const fetchAudits = async () => {
+      setIsLoadingAudits(true);
       try {
         const token = localStorage.getItem('asset_track_token');
-        const res = await fetch('/api/audits', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        const res = await fetch(`/api/audits?t=${new Date().getTime()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          cache: 'no-store'
         });
         if (res.ok) {
           const data = await res.json();
@@ -35,25 +39,23 @@ export const Reports: React.FC<ReportsProps> = ({ user, assets, categories, depa
         }
       } catch (err) {
         console.error("Failed to fetch audits", err);
+      } finally {
+        setIsLoadingAudits(false);
       }
     };
     fetchAudits();
   }, []);
 
-  const complianceScore = useMemo(() => {
-    if (auditData.length === 0 || assets.length === 0) return '0%';
-    
-    // Use the most recently created audit that has verifications
-    const sortedAudits = [...auditData].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    const latestAudit = sortedAudits.find(a => a.verifications && a.verifications.length > 0);
-    
-    if (!latestAudit) return '0%';
-
-    const verifiedCount = latestAudit.verifications.filter((v: any) => v.result === 'Verified').length;
-    // Calculate against total assets at the time, or current assets
-    const score = Math.round((verifiedCount / assets.length) * 100);
-    return `${score}%`;
-  }, [auditData, assets]);
+  let complianceScore = '0%';
+  if (isLoadingAudits) {
+    complianceScore = '...';
+  } else if (auditData.length > 0 && assets.length > 0) {
+    const latestAudit = auditData.find(a => a.verifications && a.verifications.length > 0);
+    if (latestAudit) {
+      const verifiedCount = latestAudit.verifications.filter((v: any) => v.result === 'Verified').length;
+      complianceScore = `${Math.round((verifiedCount / assets.length) * 100)}%`;
+    }
+  }
 
   const kpis = useMemo(() => {
     const totalVal = assets.reduce((sum, a) => sum + a.purchasePrice, 0);
@@ -64,7 +66,7 @@ export const Reports: React.FC<ReportsProps> = ({ user, assets, categories, depa
       { label: 'TOTAL ASSETS', value: assets.length, icon: 'inventory', color: 'purple' },
       { label: 'DECOMMISSIONED', value: decommissioned, icon: 'delete_forever', color: 'red' },
     ];
-  }, [assets]);
+  }, [assets, complianceScore]);
 
   const columns = [
     { key: 'id', label: 'ID' },

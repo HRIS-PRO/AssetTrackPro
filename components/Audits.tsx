@@ -44,8 +44,9 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
     const fetchAudits = async () => {
       try {
         const token = localStorage.getItem('asset_track_token');
-        const res = await fetch('/api/audits', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        const res = await fetch(`/api/audits?t=${new Date().getTime()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          cache: 'no-store'
         });
         if (res.ok) {
           const data = await res.json();
