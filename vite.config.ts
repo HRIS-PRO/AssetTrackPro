@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: 'http://localhost:3001',
+          target: 'https://hris-pro-backend-production.up.railway.app',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, '')
         }
