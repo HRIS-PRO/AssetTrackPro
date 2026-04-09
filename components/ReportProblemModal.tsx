@@ -1,29 +1,46 @@
 
 import React, { useState, useMemo } from 'react';
-import { Asset, User } from '../types';
+import { Asset } from '../types';
+import { useAssetTracker } from '../AssetTrackerContext';
 
 interface ReportProblemModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: any) => void;
-  user: User;
-  assets: Asset[];
   initialAssetId?: string;
 }
 
 export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
-  isOpen, onClose, onSubmit, user, assets, initialAssetId
+  isOpen, onClose, onSubmit, initialAssetId
 }) => {
-  const myAssets = useMemo(() => assets.filter(a => a.assignedTo === user.id), [assets, user.id]);
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(
-    initialAssetId ? assets.find(a => a.id === initialAssetId) || null : myAssets[0] || null
-  );
+  const { user, assets } = useAssetTracker();
+  
+  const myAssets = useMemo(() => {
+    if (!user) return [];
+    return assets.filter(a => a.assignedTo === user.id || a.assignedTo === user.userId);
+  }, [assets, user]);
+
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(() => {
+    if (initialAssetId) return assets.find(a => a.id === initialAssetId) || null;
+    return myAssets[0] || null;
+  });
+  
+  // Update selected asset if myAssets changes or initialAssetId changes
+  React.useEffect(() => {
+    if (initialAssetId) {
+      const found = assets.find(a => a.id === initialAssetId);
+      if (found) setSelectedAsset(found);
+    } else if (!selectedAsset && myAssets.length > 0) {
+      setSelectedAsset(myAssets[0]);
+    }
+  }, [initialAssetId, assets, myAssets, selectedAsset]);
+
   const [comments, setComments] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  if (!isOpen || !user) return null;
 
   const handleSubmit = async () => {
     if (!selectedAsset || !comments.trim()) return;
@@ -41,7 +58,8 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
     }
   };
 
-  const getCategoryIcon = (cat: string) => {
+  const getCategoryIcon = (cat: string | undefined) => {
+    if (!cat) return 'inventory_2';
     const c = cat.toLowerCase();
     if (c.includes('laptop')) return 'laptop_mac';
     if (c.includes('monitor')) return 'monitor';
@@ -85,7 +103,7 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
                     </div>
                     <div className="text-left">
                       <p className="font-black text-slate-900 dark:text-white leading-none">{selectedAsset.name}</p>
-                      <p className="text-[10px] font-black text-slate-400 uppercase mt-1">SERIAL: {selectedAsset.serialNumber}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase mt-1">SERIAL: {selectedAsset.serialNumber || 'N/A'}</p>
                     </div>
                   </div>
                 ) : (
@@ -105,7 +123,7 @@ export const ReportProblemModal: React.FC<ReportProblemModalProps> = ({
                       <span className="material-symbols-outlined text-slate-400">{getCategoryIcon(asset.category)}</span>
                       <div>
                         <p className="font-bold text-sm dark:text-white">{asset.name}</p>
-                        <p className="text-[10px] font-black text-slate-400 uppercase">SN: {asset.serialNumber}</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase">SN: {asset.serialNumber || 'N/A'}</p>
                       </div>
                     </button>
                   ))}

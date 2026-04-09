@@ -1,8 +1,8 @@
 
 import React, { useState, useLayoutEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { UserRole, User, Asset, Activity, EquipmentRequest, AssetReport } from './types';
-import { MOCK_USERS, MOCK_ASSETS, CATEGORIES, DEPARTMENTS } from './constants';
+import { UserRole, User, AssetReport } from './types';
+import { MOCK_USERS } from './constants';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
@@ -18,37 +18,19 @@ import { ReportProblemModal } from './components/ReportProblemModal';
 import { AssetConsent } from './components/AssetConsent';
 import { ToastProvider, useToast } from './components/Toast';
 import { useReportSocket } from './hooks/useReportSocket';
-import { ReportStatus } from './types';
+import { ReportStatus, EquipmentRequest } from './types';
+import { AssetTrackerProvider, useAssetTracker } from './AssetTrackerContext';
 
 const AppContent: React.FC = () => {
-  const [user, setUser] = useState<User | null>(() => {
-    const token = localStorage.getItem('asset_track_token');
-    const savedUserStr = localStorage.getItem('asset_track_user');
-    if (token && savedUserStr) {
-      try {
-        return JSON.parse(savedUserStr);
-      } catch (e) {
-        console.error("Failed to parse saved user", e);
-      }
-    }
-    return null;
-  });
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile-first closed state
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [team, setTeam] = useState<User[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [categories, setCategories] = useState<{ id: string, name: string }[]>([]);
-  const [assetLocations, setAssetLocations] = useState<{ id: string, name: string }[]>([]);
-  const [departments, setDepartments] = useState<{ id: string, name: string }[]>([]);
-  const [superAdmins, setSuperAdmins] = useState<{ id: string, email: string }[]>([]);
-  const [requests, setRequests] = useState<EquipmentRequest[]>([]);
-  const [managedRequests, setManagedRequests] = useState<EquipmentRequest[]>([]);
-  const [faultyReports, setFaultyReports] = useState<AssetReport[]>([]);
-  const [managedReports, setManagedReports] = useState<AssetReport[]>([]);
+  const { 
+    user, setUser, assets, team, activities,
+    setRequests, setManagedRequests, setFaultyReports,
+    setManagedReports, loading, refreshAll
+  } = useAssetTracker();
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
-
-  // Modal Controller
   const [activeModal, setActiveModal] = useState<'request' | 'report' | null>(null);
   const [modalInitialAssetId, setModalInitialAssetId] = useState<string | undefined>();
 
@@ -66,138 +48,11 @@ const AppContent: React.FC = () => {
     }
   }, [isDarkMode]);
 
-  // Initial desktop open state
   useLayoutEffect(() => {
     if (window.innerWidth >= 1024) {
       setIsSidebarOpen(true);
     }
   }, []);
-
-  React.useEffect(() => {
-    const fetchAssets = async () => {
-      try {
-        const token = localStorage.getItem('asset_track_token');
-        const res = await fetch('/api/assets', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setAssets(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch assets", err);
-      }
-    };
-
-    const fetchMetadata = async () => {
-      try {
-        const token = localStorage.getItem('asset_track_token');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-        const [catRes, locRes, saRes, deptRes, teamRes] = await Promise.all([
-          fetch('/api/asset-categories', { headers }),
-          fetch('/api/asset-locations', { headers }),
-          fetch('/api/users/super-admins', { headers }),
-          fetch('/api/departments', { headers }),
-          fetch('/api/users/apps/asset-tracker', { headers })
-        ]);
-
-        if (catRes.ok) {
-          const cats = await catRes.json();
-          setCategories(cats);
-        }
-        if (locRes.ok) {
-          const locs = await locRes.json();
-          setAssetLocations(locs);
-        }
-        if (saRes.ok) {
-          const sans = await saRes.json();
-          setSuperAdmins(sans);
-        }
-        if (deptRes.ok) {
-          const depts = await deptRes.json();
-          setDepartments(depts.map((d: any) => ({ id: d.id, name: d.name })));
-        }
-        if (teamRes.ok) {
-          const rawTeam = await teamRes.json();
-          const mappedTeam: User[] = rawTeam.map((u: any) => {
-            const roleMap: Record<string, UserRole> = {
-              'Super Admin': UserRole.SUPER_ADMIN,
-              'Admin User': UserRole.ADMIN_USER,
-              'Auditor': UserRole.AUDITOR,
-              'Standard User': UserRole.USER
-            };
-            return {
-              id: u.id,
-              name: (u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.email.split('@')[0]),
-              email: u.email,
-              role: roleMap[u.role] || UserRole.USER,
-              department: u.department || 'General',
-              avatar: `https://ui-avatars.com/api/?name=${u.email}&background=random`,
-              employeeId: 'EMP-001',
-              location: u.location || 'Remote'
-            };
-          });
-          setTeam(mappedTeam);
-        }
-      } catch (err) {
-        console.error("Failed to fetch metadata", err);
-      }
-    };
-
-    const fetchRequests = async () => {
-      try {
-        const token = localStorage.getItem('asset_track_token');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const [mineRes, managedRes] = await Promise.all([
-          fetch('/api/equipment-requests/me', { headers }),
-          fetch('/api/equipment-requests/managed', { headers })
-        ]);
-        if (mineRes.ok) setRequests(await mineRes.json());
-        if (managedRes.ok) setManagedRequests(await managedRes.json());
-      } catch (err) {
-        console.error("Failed to fetch requests", err);
-      }
-    };
-
-    const fetchActivities = async () => {
-      try {
-        const token = localStorage.getItem('asset_track_token');
-        const res = await fetch('/api/activities', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        if (res.ok) {
-          const acts = await res.json();
-          setActivities(acts);
-        }
-      } catch (err) {
-        console.error("Failed to fetch activities", err);
-      }
-    };
-
-    const fetchReportsData = async () => {
-      try {
-        const token = localStorage.getItem('asset_track_token');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const [mineRes, managedRes] = await Promise.all([
-          fetch('/api/reports/me', { headers }),
-          fetch('/api/reports/managed', { headers })
-        ]);
-        if (mineRes.ok) setFaultyReports(await mineRes.json());
-        if (managedRes.ok) setManagedReports(await managedRes.json());
-      } catch (err) {
-        console.error("Failed to fetch reports", err);
-      }
-    };
-
-    if (user) {
-      fetchAssets();
-      fetchMetadata();
-      fetchRequests();
-      fetchReportsData();
-      fetchActivities();
-    }
-  }, [user]);
 
   const handleLogin = (u: User) => setUser(u);
   const handleLogout = () => {
@@ -210,11 +65,6 @@ const AppContent: React.FC = () => {
   const handleRoleChange = (role: UserRole) => {
     const newUser = MOCK_USERS.find(u => u.role === role) || MOCK_USERS[0];
     setUser(newUser);
-  };
-
-  const openReportModal = (assetId?: string) => {
-    setModalInitialAssetId(assetId);
-    setActiveModal('report');
   };
 
   const { addToast } = useToast();
@@ -242,9 +92,10 @@ const AppContent: React.FC = () => {
         message: 'Your faulty asset report has been recorded successfully.'
       });
       setActiveModal(null);
+      refreshAll();
     } catch (err: any) {
       console.error('Report submission error:', err);
-      throw err; // Propagate to modal for inline error
+      throw err;
     }
   };
 
@@ -271,6 +122,7 @@ const AppContent: React.FC = () => {
         message: 'Your equipment request has been submitted for approval.'
       });
       setActiveModal(null);
+      refreshAll();
     } catch (err: any) {
       console.error('Request submission error:', err);
       throw err;
@@ -279,15 +131,9 @@ const AppContent: React.FC = () => {
 
   const handleReportCreated = React.useCallback((report: AssetReport) => {
     if (report.userId === user?.id) {
-      setFaultyReports(prev => {
-        if (prev.find(r => r.id === report.id)) return prev;
-        return [report, ...prev];
-      });
+      setFaultyReports(prev => prev.find(r => r.id === report.id) ? prev : [report, ...prev]);
     } else {
-      setManagedReports(prev => {
-        if (prev.find(r => r.id === report.id)) return prev;
-        return [report, ...prev];
-      });
+      setManagedReports(prev => prev.find(r => r.id === report.id) ? prev : [report, ...prev]);
     }
     if (report.userId !== user?.id && (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN_USER)) {
       addToast({
@@ -296,31 +142,24 @@ const AppContent: React.FC = () => {
         message: `${report.userName || 'A user'} reported an issue with ${report.assetName || report.assetId}`
       });
     }
-  }, [user?.id, user?.role, addToast]);
+  }, [user?.id, user?.role, setFaultyReports, setManagedReports, addToast]);
 
   const handleStatusUpdated = React.useCallback((data: { id: string; status: ReportStatus; assetId: string; updatedAt: string }) => {
     const updateFn = (r: AssetReport) => r.id === data.id ? { ...r, status: data.status, updatedAt: data.updatedAt } : r;
     setFaultyReports(prev => prev.map(updateFn));
     setManagedReports(prev => prev.map(updateFn));
-    // Important: Only toast if not current user OR if needed for managed items
     addToast({
       type: data.status === ReportStatus.RESOLVED ? 'success' : 'info',
       title: 'Report Status Updated',
       message: `Report for ${data.assetId} is now ${data.status.replace('_', ' ')}`
     });
-  }, [addToast]);
+  }, [setFaultyReports, setManagedReports, addToast]);
 
   const handleRequestCreated = React.useCallback((request: EquipmentRequest) => {
     if (request.userId === user?.id) {
-      setRequests(prev => {
-        if (prev.find(r => r.id === request.id)) return prev;
-        return [request, ...prev];
-      });
+      setRequests(prev => prev.find(r => r.id === request.id) ? prev : [request, ...prev]);
     } else {
-      setManagedRequests(prev => {
-        if (prev.find(r => r.id === request.id)) return prev;
-        return [request, ...prev];
-      });
+      setManagedRequests(prev => prev.find(r => r.id === request.id) ? prev : [request, ...prev]);
     }
     if (request.userId !== user?.id && (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN_USER)) {
       addToast({
@@ -329,7 +168,7 @@ const AppContent: React.FC = () => {
         message: `${request.userName} requested a ${request.categoryName}`
       });
     }
-  }, [user?.id, user?.role, addToast]);
+  }, [user?.id, user?.role, setRequests, setManagedRequests, addToast]);
 
   const handleRequestStatusUpdated = React.useCallback((request: EquipmentRequest) => {
     const updateFn = (r: EquipmentRequest) => r.id === request.id ? request : r;
@@ -342,7 +181,7 @@ const AppContent: React.FC = () => {
         message: `Your ${request.categoryName} request is now ${request.status.replace(/_/g, ' ')}`
       });
     }
-  }, [user?.id, addToast]);
+  }, [user?.id, setRequests, setManagedRequests, addToast]);
 
   useReportSocket({
     onReportCreated: handleReportCreated,
@@ -368,10 +207,6 @@ const AppContent: React.FC = () => {
 
       <main className="flex-1 overflow-y-auto transition-all duration-300 relative">
         <Header
-          user={user}
-          isDarkMode={isDarkMode}
-          activities={activities}
-          setActivities={setActivities}
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
           searchQuery={globalSearchQuery}
@@ -379,6 +214,7 @@ const AppContent: React.FC = () => {
         />
 
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-fade-in">
+          {loading && <div className="fixed top-0 left-0 w-full h-1 bg-blue-500 animate-pulse z-[200]"></div>}
           <Routes>
             <Route path="/" element={<Dashboard
               user={user}
@@ -386,82 +222,48 @@ const AppContent: React.FC = () => {
               isDarkMode={isDarkMode}
               activities={activities}
               onRequestAsset={() => setActiveModal('request')}
-              onReportProblem={() => openReportModal()}
-              requests={requests}
-              managedRequests={managedRequests}
-              allReports={faultyReports}
-              managedReports={managedReports}
+              onReportProblem={() => { setModalInitialAssetId(undefined); setActiveModal('report'); }}
+              requests={[]} // Not used anymore as Dashboard handles its own context filtering
+              managedRequests={[]}
+              allReports={[]}
+              managedReports={[]}
             />} />
-            <Route path="/assets" element={<AssetManagement
-              user={user}
-              assets={assets}
-              setAssets={setAssets}
-              categories={categories}
-              setCategories={setCategories}
-              departments={departments}
-              setDepartments={setDepartments}
-              assetLocations={assetLocations}
-              setAssetLocations={setAssetLocations}
-              superAdmins={superAdmins}
-              team={team}
-              onReportAsset={openReportModal}
+            <Route path="/assets" element={<AssetManagement 
+              onReportAsset={(id) => { setModalInitialAssetId(id); setActiveModal('report'); }}
               searchQuery={globalSearchQuery}
             />} />
             <Route path="/consent/:assetId" element={<AssetConsent
-              user={user}
-              assets={assets}
-              onReportIssue={openReportModal}
+              onReportIssue={(id) => { setModalInitialAssetId(id); setActiveModal('report'); }}
             />} />
             <Route path="/requests" element={<Requests
-              user={user}
               onRequestAsset={() => setActiveModal('request')}
-              requests={requests}
-              managedRequests={managedRequests}
-              faultyReports={faultyReports}
-              managedReports={managedReports}
             />} />
-            <Route path="/audits" element={<Audits user={user} assets={assets} />} />
-            <Route path="/reports" element={<Reports user={user} assets={assets} categories={categories} departments={departments} />} />
-            <Route path="/profile" element={<Profile user={user} />} />
-            <Route path="/settings" element={<Settings
-              user={user}
-              team={team}
-              setTeam={setTeam}
-              categories={categories}
-              setCategories={setCategories}
-              departments={departments}
-              setDepartments={setDepartments}
-              assetLocations={assetLocations}
-              setAssetLocations={setAssetLocations}
-              superAdmins={superAdmins}
-            />} />
+            <Route path="/audits" element={<Audits />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </div>
       </main>
 
-      {/* Global Modals */}
       <RequestAssetModal
         isOpen={activeModal === 'request'}
         onClose={() => setActiveModal(null)}
         onSubmit={handleRequestSubmit}
-        categories={categories}
       />
 
       <ReportProblemModal
         isOpen={activeModal === 'report'}
         onClose={() => setActiveModal(null)}
         onSubmit={handleReportSubmit}
-        user={user}
-        assets={assets}
         initialAssetId={modalInitialAssetId}
       />
 
-      {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowLogoutConfirm(false)}></div>
-          <div className="relative bg-white dark:bg-slate-950 w-full max-w-sm rounded-[2.5rem] shadow-2xl p-10 text-center space-y-8 border border-slate-200 dark:border-slate-800 animate-fade-in">
+          <div className="relative bg-white dark:bg-slate-950 w-full max-sm rounded-[2.5rem] shadow-2xl p-10 text-center space-y-8 border border-slate-200 dark:border-slate-800 animate-fade-in">
             <div className="w-20 h-20 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-full flex items-center justify-center mx-auto">
               <span className="material-symbols-outlined text-4xl">logout</span>
             </div>
@@ -484,7 +286,9 @@ const App: React.FC = () => {
   return (
     <Router>
       <ToastProvider>
-        <AppContent />
+        <AssetTrackerProvider>
+          <AppContent />
+        </AssetTrackerProvider>
       </ToastProvider>
     </Router>
   );

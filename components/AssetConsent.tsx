@@ -1,15 +1,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Asset, User } from '../types';
+import { useAssetTracker } from '../AssetTrackerContext';
 
 interface AssetConsentProps {
-  user: User;
-  assets: Asset[];
   onReportIssue: (assetId: string) => void;
 }
 
-export const AssetConsent: React.FC<AssetConsentProps> = ({ user, assets, onReportIssue }) => {
+export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => {
+  const { assets } = useAssetTracker();
   const { assetId } = useParams<{ assetId: string }>();
   const navigate = useNavigate();
   const [isConfirmed, setIsConfirmed] = useState(false);
@@ -19,7 +18,6 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ user, assets, onRepo
 
   const asset = assets.find(a => a.id === assetId) || assets[0];
 
-  // Canvas Setup
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
@@ -32,6 +30,8 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ user, assets, onRepo
       }
     }
   }, []);
+
+  if (!asset) return null;
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     setIsDrawing(true);
@@ -105,7 +105,6 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ user, assets, onRepo
 
   return (
     <div className="max-w-5xl mx-auto space-y-10 py-6 pb-20 animate-fade-in">
-      {/* Page Header */}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg">
@@ -119,11 +118,10 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ user, assets, onRepo
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col transition-colors">
-        {/* Visual Asset Card */}
         <div className="p-8 md:p-12 flex flex-col md:flex-row gap-12 border-b border-slate-100 dark:border-slate-800">
           <div className="w-full md:w-80 h-64 bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] flex items-center justify-center border-2 border-slate-100 dark:border-slate-700/50 shrink-0 overflow-hidden group">
              <span className="material-symbols-outlined text-[8rem] text-slate-200 dark:text-slate-700 group-hover:scale-110 transition-transform duration-700">
-               {asset.category.toLowerCase().includes('laptop') ? 'laptop_mac' : 'inventory_2'}
+               {asset.category?.toLowerCase().includes('laptop') ? 'laptop_mac' : 'inventory_2'}
              </span>
           </div>
           
@@ -157,7 +155,6 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ user, assets, onRepo
           </div>
         </div>
 
-        {/* Detail Grid */}
         <div className="p-8 md:p-12 grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-10 border-b border-slate-100 dark:border-slate-800">
            <div className="space-y-2">
              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Serial Number</p>
@@ -191,7 +188,6 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ user, assets, onRepo
            </div>
         </div>
 
-        {/* Terms of Custody */}
         <div className="p-8 md:p-12 bg-slate-50/50 dark:bg-slate-950/20 space-y-10">
            <div className="space-y-6">
               <div className="flex items-center gap-3">
@@ -199,21 +195,11 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ user, assets, onRepo
                 <h3 className="text-sm font-black uppercase tracking-widest dark:text-white">Terms of Custody</h3>
               </div>
               <div className="prose prose-slate dark:prose-invert max-w-none text-sm font-bold text-slate-500 dark:text-slate-400 leading-relaxed space-y-4">
-                <p>
-                  By clicking "Confirm Receipt", I acknowledge that I have received the asset described above. I agree to maintain the equipment in good working condition and report any loss, theft, or damage immediately to the IT department.
-                </p>
-                <p>
-                  I understand that this asset is the property of AssetTrackPro Inc. and must be returned upon termination of employment or upon request by management. Use of this equipment must comply with the corporate Acceptable Use Policy.
-                </p>
-              </div>
-              <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
-                <p className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">
-                  REQUEST GENERATED: OCT 24, 2024 10:00 AM • IP: 192.168.1.45 • REF: REQ-9921
-                </p>
+                <p>By clicking "Confirm Receipt", I acknowledge that I have received the asset described above. I agree to maintain the equipment in good working condition and report any loss, theft, or damage immediately to the IT department.</p>
+                <p>I understand that this asset is the property of AssetTrackPro Inc. and must be returned upon termination of employment or upon request by management.</p>
               </div>
            </div>
 
-           {/* Signature Section */}
            <div className="space-y-4 pt-4">
               <div className="flex justify-between items-end">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Draw Digital Signature</p>
@@ -227,7 +213,6 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ user, assets, onRepo
                   onMouseDown={startDrawing}
                   onMouseMove={draw}
                   onMouseUp={stopDrawing}
-                  onMouseOut={stopDrawing}
                   onTouchStart={startDrawing}
                   onTouchMove={draw}
                   onTouchEnd={stopDrawing}
@@ -238,12 +223,10 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ user, assets, onRepo
                     <p className="text-2xl font-black uppercase tracking-[0.5em] text-slate-300">Sign Here</p>
                   </div>
                 )}
-                <div className="absolute bottom-6 left-10 right-10 h-[1px] bg-slate-200 dark:bg-slate-800 pointer-events-none"></div>
               </div>
            </div>
         </div>
 
-        {/* Footer Actions */}
         <div className="p-8 md:p-12 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-6">
            <button 
              onClick={() => onReportIssue(asset.id)}
@@ -262,12 +245,6 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ user, assets, onRepo
            </button>
         </div>
       </div>
-
-      <footer className="flex justify-center gap-12 py-4">
-        {['Privacy Policy', 'IT Support', 'Asset Policy'].map(item => (
-          <button key={item} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">{item}</button>
-        ))}
-      </footer>
     </div>
   );
 };

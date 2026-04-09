@@ -1,202 +1,102 @@
 
-import React, { useState, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { User, UserRole, Asset, AssetStatus } from '../types';
-import { ReportModal } from './ReportModal';
+import React, { useState, useMemo, useRef } from 'react';
+import { UserRole, AssetStatus, Asset } from '../types';
+import { useAssetTracker } from '../AssetTrackerContext';
+import { AssetProfile } from './AssetProfile';
+import { AddAssetWorkflow } from './AddAssetWorkflow';
+import { BulkOperations } from './BulkOperations';
 
 interface AssetManagementProps {
-  user: User;
-  assets: Asset[];
-  setAssets: React.Dispatch<React.SetStateAction<Asset[]>>;
-  categories: { id: string, name: string }[];
-  setCategories: React.Dispatch<React.SetStateAction<{ id: string, name: string }[]>>;
-  departments: string[];
-  setDepartments: React.Dispatch<React.SetStateAction<string[]>>;
-  assetLocations: { id: string, name: string }[];
-  setAssetLocations: React.Dispatch<React.SetStateAction<{ id: string, name: string }[]>>;
-  team: User[];
   onReportAsset?: (assetId: string) => void;
   searchQuery?: string;
-  superAdmins: { id: string, email: string }[];
 }
 
 export const AssetManagement: React.FC<AssetManagementProps> = ({
-  user, assets, setAssets, categories, setCategories, departments, setDepartments, assetLocations, setAssetLocations, team, onReportAsset, searchQuery, superAdmins
+  onReportAsset, searchQuery
 }) => {
+  const {
+    user, assets, setAssets, categories, 
+    departments, assetLocations, team, allEmployees
+  } = useAssetTracker();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
   const [selectedLocationFilter, setSelectedLocationFilter] = useState('All');
+  
   const [isAdding, setIsAdding] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [isCreatingAsset, setIsCreatingAsset] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [lastAddedAsset, setLastAddedAsset] = useState<Asset | null>(null);
+  
   const [viewingAssetId, setViewingAssetId] = useState<string | null>(null);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [assetTab, setAssetTab] = useState<'ALL' | 'PENDING_ME'>('ALL');
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
-  // Bulk Ops Modal State
+  // Bulk Ops Visibility State
   const [isBulkDecommissioning, setIsBulkDecommissioning] = useState(false);
   const [isBulkTagging, setIsBulkTagging] = useState(false);
-
   const [isBulkAccepting, setIsBulkAccepting] = useState(false);
-  const [isBulkAcceptingState, setIsBulkAcceptingState] = useState(false);
-  const [isAcceptingAsset, setIsAcceptingAsset] = useState<string | null>(null);
-  const [tagSelection, setTagSelection] = useState<string | null>(null);
+  const [isBulkAssigningModalOpen, setIsBulkAssigningModalOpen] = useState(false);
 
-  // Inline Assignment State
+  // Single Action State
+  const [isAcceptingAsset, setIsAcceptingAsset] = useState<string | null>(null);
   const [inlineAssignAssetId, setInlineAssignAssetId] = useState<string | null>(null);
   const [inlineUserSearch, setInlineUserSearch] = useState('');
   const [isInlineAssigning, setIsInlineAssigning] = useState<string | null>(null);
 
-  // Bulk Assignment State
-  const [isBulkAssigningModalOpen, setIsBulkAssigningModalOpen] = useState(false);
-  const [bulkAssignUserSearch, setBulkAssignUserSearch] = useState('');
-  const [isBulkAssigning, setIsBulkAssigning] = useState(false);
-
-  // Super Admin Reassign/Decommission State
+  // Super Admin Action State
   const [isReassigningAssetId, setIsReassigningAssetId] = useState<string | null>(null);
   const [reassignUserSearch, setReassignUserSearch] = useState('');
   const [isSubmittingReassign, setIsSubmittingReassign] = useState(false);
   const [isDecommissioningAssetId, setIsDecommissioningAssetId] = useState<string | null>(null);
   const [isSubmittingDecommission, setIsSubmittingDecommission] = useState(false);
 
-  // Form State
-  const [formData, setFormData] = useState({
-    name: '',
-    condition: 'Brand New',
-    category: '',
-    serialNumber: '',
-    description: '',
-    purchaseDate: new Date().toISOString().split('T')[0],
-    purchasePrice: '',
-    warrantyExpiry: '',
-    assignedTo: '',
-    manager: '',
-    department: '',
-    location: '',
-  });
+  const isAdmin = user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN_USER;
+  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
+  const isAuditor = user?.role === UserRole.AUDITOR;
+  const canExportAndSeeUsers = user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.AUDITOR;
 
-  const [errors, setErrors] = useState<Record<string, boolean>>({});
-  const [newCategoryInput, setNewCategoryInput] = useState('');
-  const [selectedSA, setSelectedSA] = useState('');
-  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
-  const [userSearch, setUserSearch] = useState('');
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [allEmployees, setAllEmployees] = useState<any[]>([]);
-  const [allDepartments, setAllDepartments] = useState<any[]>([]);
+  const displayAssets = isAdmin ? assets : assets.filter(a => a.assignedTo === user?.id);
+  const pendingCount = assets.filter(a => a.status === AssetStatus.PENDING && (a.assignedTo === user?.id)).length;
 
-  React.useEffect(() => {
-    // Fetch actual employees list to replace mock team
-    const fetchEmployees = async () => {
-      try {
-        const token = localStorage.getItem('asset_track_token');
-        const res = await fetch('/api/employees', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setAllEmployees(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch employees", err);
+  const filteredAssets = useMemo(() => {
+    return displayAssets.filter(a => {
+      if (assetTab === 'PENDING_ME') {
+        if (a.status !== AssetStatus.PENDING) return false;
+        if (a.assignedTo !== user?.id && a.assignedTo !== user?.userId) return false;
       }
-    };
-
-    const fetchDepartments = async () => {
-      try {
-        const token = localStorage.getItem('asset_track_token');
-        const res = await fetch('/api/departments', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        if (res.ok) {
-          const data = await res.json();
-          console.log(data)
-          setAllDepartments(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch departments", err);
-      }
-    };
-
-    fetchEmployees();
-    fetchDepartments();
-  }, []);
-
-  const isAdmin = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN_USER;
-  const isSuperAdmin = user.role === UserRole.SUPER_ADMIN;
-  const isAuditor = user.role === UserRole.AUDITOR;
-  const canExportAndSeeUsers = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.AUDITOR;
-
-  const displayAssets = isAdmin ? assets : assets.filter(a => a.assignedTo === user.id);
-
-  const pendingCount = assets.filter(a => a.status === AssetStatus.PENDING && (a.assignedTo === user.id || a.assignedTo === user?.userId)).length;
-
-  const filteredAssets = displayAssets.filter(a => {
-    if (assetTab === 'PENDING_ME') {
-      if (a.status !== AssetStatus.PENDING) return false;
-      if (a.assignedTo !== user.id && a.assignedTo !== user?.userId) return false;
-    }
-    const query = searchQuery ? searchQuery.toLowerCase() : '';
-    return (
-      (a.name.toLowerCase().includes(query) || a.id.toLowerCase().includes(query)) &&
-      (selectedCategoryFilter === 'All' || a.category === selectedCategoryFilter) &&
-      (selectedStatusFilter === 'All' || a.status === selectedStatusFilter) &&
-      (selectedLocationFilter === 'All' || a.location === selectedLocationFilter)
-    );
-  });
+      const query = searchQuery ? searchQuery.toLowerCase() : '';
+      return (
+        (a.name.toLowerCase().includes(query) || a.id.toLowerCase().includes(query)) &&
+        (selectedCategoryFilter === 'All' || a.category === selectedCategoryFilter) &&
+        (selectedStatusFilter === 'All' || a.status === selectedStatusFilter) &&
+        (selectedLocationFilter === 'All' || a.location === selectedLocationFilter)
+      );
+    });
+  }, [displayAssets, assetTab, user, searchQuery, selectedCategoryFilter, selectedStatusFilter, selectedLocationFilter]);
 
   const viewingAsset = useMemo(() =>
     assets.find(a => a.id === viewingAssetId), [assets, viewingAssetId]
   );
 
-  const custodian = useMemo(() =>
-    viewingAsset ? allEmployees.find(u => u.id === viewingAsset.assignedTo || u.userId === viewingAsset.assignedTo) || team.find(u => u.id === viewingAsset.assignedTo) : null
-    , [viewingAsset, allEmployees, team]);
-
-  const filteredUsers = useMemo(() => {
-    const listToSearch = allEmployees.length > 0 ? allEmployees : team;
-    if (!userSearch) return listToSearch;
-    return listToSearch.filter(u =>
-      (u.firstName + ' ' + u.surname).toLowerCase().includes(userSearch.toLowerCase()) ||
-      (u.name || '').toLowerCase().includes(userSearch.toLowerCase())
-    );
-  }, [userSearch, allEmployees, team]);
-
   const filteredInlineUsers = useMemo(() => {
     const listToSearch = allEmployees.length > 0 ? allEmployees : team;
     if (!inlineUserSearch) return listToSearch;
     return listToSearch.filter(u =>
-      (u.firstName + ' ' + u.surname).toLowerCase().includes(inlineUserSearch.toLowerCase()) ||
+      (u.firstName + ' ' + (u.surname || u.lastName || '')).toLowerCase().includes(inlineUserSearch.toLowerCase()) ||
       (u.name || '').toLowerCase().includes(inlineUserSearch.toLowerCase())
     );
   }, [inlineUserSearch, allEmployees, team]);
-
-  const filteredBulkUsers = useMemo(() => {
-    const listToSearch = allEmployees.length > 0 ? allEmployees : team;
-    if (!bulkAssignUserSearch) return listToSearch;
-    return listToSearch.filter(u =>
-      (u.firstName + ' ' + u.surname).toLowerCase().includes(bulkAssignUserSearch.toLowerCase()) ||
-      (u.name || '').toLowerCase().includes(bulkAssignUserSearch.toLowerCase())
-    );
-  }, [bulkAssignUserSearch, allEmployees, team]);
 
   const filteredReassignUsers = useMemo(() => {
     const listToSearch = allEmployees.length > 0 ? allEmployees : team;
     if (!reassignUserSearch) return listToSearch;
     return listToSearch.filter(u =>
-      (u.firstName + ' ' + u.surname).toLowerCase().includes(reassignUserSearch.toLowerCase()) ||
+      (u.firstName + ' ' + (u.surname || u.lastName || '')).toLowerCase().includes(reassignUserSearch.toLowerCase()) ||
       (u.name || '').toLowerCase().includes(reassignUserSearch.toLowerCase())
     );
   }, [reassignUserSearch, allEmployees, team]);
-
-  const selectedTotalValue = useMemo(() => {
-    return assets
-      .filter(a => selectedAssetIds.includes(a.id))
-      .reduce((sum, a) => sum + (Number(a.purchasePrice) || 0), 0);
-  }, [assets, selectedAssetIds]);
 
   const { canBulkAssign, canBulkAccept, isOnlyUnassigned } = useMemo(() => {
     const selectedList = assets.filter(a => selectedAssetIds.includes(a.id));
@@ -204,19 +104,18 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
 
     const isOnlyUnassigned = selectedList.every(a => (!a.assignedTo || a.status === 'IDLE'));
     const canBulkAssign = isAdmin && isOnlyUnassigned;
-    const canBulkAccept = !isOnlyUnassigned && selectedList.some(a => a.status === AssetStatus.PENDING && (isAdmin || a.assignedTo === user.id || a.assignedTo === user?.userId));
+    const canBulkAccept = !isOnlyUnassigned && selectedList.some(a => a.status === AssetStatus.PENDING && (isAdmin || a.assignedTo === user?.id || a.assignedTo === user?.userId));
 
     return { canBulkAssign, canBulkAccept, isOnlyUnassigned };
   }, [assets, selectedAssetIds, isAdmin, user]);
 
   const toggleSelectAll = () => {
-    // Selectable assets are either PENDING assets assigned to me, OR if I'm admin, any PENDING or IDLE/unassigned asset.
     const selectableAssets = filteredAssets.filter(a =>
-      (a.status === AssetStatus.PENDING && (isAdmin || a.assignedTo === user.id || a.assignedTo === user?.userId)) ||
+      (a.status === AssetStatus.PENDING && (isAdmin || a.assignedTo === user?.id || a.assignedTo === user?.userId)) ||
       (isAdmin && (!a.assignedTo || a.status === 'IDLE'))
     );
 
-    if (selectedAssetIds.length === selectableAssets.length) {
+    if (selectedAssetIds.length === selectableAssets.length && selectableAssets.length > 0) {
       setSelectedAssetIds([]);
     } else {
       setSelectedAssetIds(selectableAssets.map(a => a.id));
@@ -254,63 +153,6 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
     }, 1200);
   };
 
-  const handleDownloadTemplate = () => {
-    const headers = ['Name', 'Category', 'Serial Number', 'Purchase Price', 'Purchase Date', 'Condition', 'Location', 'Department', 'Manager', 'Assigned User ID', 'Description'];
-    const csvContent = headers.join(",") + "\n";
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "asset_import_template.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const applyBulkDecommission = () => {
-    setAssets(prev => prev.map(a =>
-      selectedAssetIds.includes(a.id) ? { ...a, status: AssetStatus.DECOMMISSIONED } : a
-    ));
-    setIsBulkDecommissioning(false);
-    setSelectedAssetIds([]);
-  };
-
-  const applyBulkTag = () => {
-    if (!tagSelection) return;
-    setAssets(prev => prev.map(a =>
-      selectedAssetIds.includes(a.id) ? { ...a, tags: Array.from(new Set([...(a.tags || []), tagSelection])) } : a
-    ));
-    setIsBulkTagging(false);
-    setTagSelection(null);
-    setSelectedAssetIds([]);
-  };
-
-  const applyBulkAccept = async () => {
-    setIsBulkAcceptingState(true);
-    try {
-      const token = localStorage.getItem('asset_track_token');
-      const res = await fetch('/api/assets/bulk-accept', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ assetIds: selectedAssetIds })
-      });
-      if (res.ok) {
-        setAssets(prev => prev.map(a => selectedAssetIds.includes(a.id) ? { ...a, status: AssetStatus.ACTIVE } : a));
-      } else {
-        alert("Failed to bulk accept assets.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error accepting assets.");
-    }
-    setIsBulkAcceptingState(false);
-    setIsBulkAccepting(false);
-    setSelectedAssetIds([]);
-  };
-
   const acceptAsset = async (assetId: string) => {
     setIsAcceptingAsset(assetId);
     try {
@@ -321,20 +163,16 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       });
       if (res.ok) {
         setAssets(prev => prev.map(a => a.id === assetId ? { ...a, status: AssetStatus.ACTIVE } : a));
-      } else {
-        alert("Failed to accept asset");
       }
     } catch (err) {
       console.error(err);
-      alert("Error accepting asset");
+    } finally {
+      setIsAcceptingAsset(null);
     }
-    setIsAcceptingAsset(null);
   };
 
   const handleInlineAssign = async (assetId: string, userToAssign: any) => {
     setIsInlineAssigning(assetId);
-
-    // Resolve department and manager details for this user
     const deptName = userToAssign.department?.name || userToAssign.department || 'Unknown';
     let managerName = '';
     let finalDeptName = deptName;
@@ -342,7 +180,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
     const uDeptId = userToAssign.department?.id || userToAssign.department;
     const uDeptName = userToAssign.department?.name || userToAssign.department;
 
-    const fullDept = allDepartments.find(d => d.id === uDeptId || d.name === uDeptName);
+    const fullDept = departments.find(d => d.id === uDeptId || d.name === uDeptName);
     if (fullDept) {
       finalDeptName = fullDept.name;
       if (fullDept.head?.name && fullDept.head?.name !== 'Unassigned') {
@@ -383,85 +221,11 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         setAssets(prev => prev.map(a => a.id === assetId ? updatedAsset : a));
         setInlineAssignAssetId(null);
         setInlineUserSearch('');
-      } else {
-        const err = await res.json();
-        alert(`Failed to assign asset: ${err.message || res.statusText}`);
       }
     } catch (err) {
       console.error(err);
-      alert("Error assigning asset");
     } finally {
       setIsInlineAssigning(null);
-    }
-  };
-
-  const handleBulkAssign = async (userToAssign: any) => {
-    setIsBulkAssigning(true);
-
-    const deptName = userToAssign.department?.name || userToAssign.department || 'Unknown';
-    let managerName = '';
-    let finalDeptName = deptName;
-
-    const uDeptId = userToAssign.department?.id || userToAssign.department;
-    const uDeptName = userToAssign.department?.name || userToAssign.department;
-
-    const fullDept = allDepartments.find(d => d.id === uDeptId || d.name === uDeptName);
-    if (fullDept) {
-      finalDeptName = fullDept.name;
-      if (fullDept.head?.name && fullDept.head?.name !== 'Unassigned') {
-        managerName = fullDept.head.name;
-      } else if (fullDept.headName && fullDept.headName !== 'Unassigned') {
-        managerName = fullDept.headName;
-      }
-    }
-
-    if (!managerName && userToAssign.hiringManagerId) {
-      const mgr = allEmployees.find(emp => emp.userId === userToAssign.hiringManagerId || emp.id === userToAssign.hiringManagerId);
-      if (mgr) {
-        managerName = mgr.firstName ? `${mgr.firstName} ${mgr.surname}` : mgr.name;
-      } else {
-        managerName = userToAssign.hiringManagerId;
-      }
-    }
-
-    const payload = {
-      assetIds: selectedAssetIds,
-      data: {
-        assignedTo: userToAssign.userId || userToAssign.id,
-        manager: managerName,
-        department: finalDeptName
-      }
-    };
-
-    try {
-      const token = localStorage.getItem('asset_track_token');
-      const res = await fetch(`/api/assets/bulk-assign`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        const updatedAssetsData = await res.json();
-        const updatedMap = new Map((updatedAssetsData as any[]).map(a => [a.id, a]));
-
-        setAssets(prev => prev.map(a => updatedMap.has(a.id) ? updatedMap.get(a.id)! : a));
-
-        setSelectedAssetIds([]);
-        setIsBulkAssigningModalOpen(false);
-        setBulkAssignUserSearch('');
-      } else {
-        const err = await res.json();
-        alert(`Failed to bulk assign assets: ${err.message || res.statusText}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error making bulk assignment");
-    } finally {
-      setIsBulkAssigning(false);
     }
   };
 
@@ -476,7 +240,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
     const uDeptId = userToAssign.department?.id || userToAssign.department;
     const uDeptName = userToAssign.department?.name || userToAssign.department;
 
-    const fullDept = allDepartments.find(d => d.id === uDeptId || d.name === uDeptName);
+    const fullDept = departments.find(d => d.id === uDeptId || d.name === uDeptName);
     if (fullDept) {
       finalDeptName = fullDept.name;
       if (fullDept.head?.name && fullDept.head?.name !== 'Unassigned') {
@@ -517,13 +281,9 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         setAssets(prev => prev.map(a => a.id === isReassigningAssetId ? updatedAsset : a));
         setIsReassigningAssetId(null);
         setReassignUserSearch('');
-      } else {
-        const err = await res.json();
-        alert(`Failed to reassign asset: ${err.message || res.statusText}`);
       }
     } catch (err) {
       console.error(err);
-      alert("Error reassigning asset");
     } finally {
       setIsSubmittingReassign(false);
     }
@@ -543,106 +303,98 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         const updatedAsset = await res.json();
         setAssets(prev => prev.map(a => a.id === isDecommissioningAssetId ? updatedAsset : a));
         setIsDecommissioningAssetId(null);
-      } else {
-        const err = await res.json();
-        alert(`Failed to decommission asset: ${err.message || res.statusText}`);
       }
     } catch (err) {
       console.error(err);
-      alert("Error decommissioning asset");
     } finally {
       setIsSubmittingDecommission(false);
     }
   };
 
-  const validate = (type?: 'another' | 'consent') => {
-    const newErrors: Record<string, boolean> = {};
-    const required = ['name', 'category', 'serialNumber', 'purchasePrice'];
-
-    // Only strictly require assignment details if we are sending for consent
-    if (type === 'consent') {
-      required.push('assignedTo', 'manager', 'department');
-    }
-
-    required.forEach(field => {
-      if (!formData[field as keyof typeof formData]) newErrors[field] = true;
-    });
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSave = async (type?: 'another' | 'consent') => {
-    if (!validate(type)) return;
-
-    setIsCreatingAsset(true);
-    // Switch to FormData for multipart upload
-    const submitData = new FormData();
-    if (receiptFile) {
-      submitData.append('receipt', receiptFile);
-    }
-    submitData.append('data', JSON.stringify({
-      name: formData.name,
-      category: formData.category,
-      assignedTo: formData.assignedTo,
-      department: formData.department,
-      purchaseDate: formData.purchaseDate,
-      purchasePrice: parseFloat(formData.purchasePrice),
-      condition: formData.condition,
-      location: formData.location,
-      manager: formData.manager,
-      serialNumber: formData.serialNumber,
-      description: formData.description
-    }));
-
-    try {
-      const token = localStorage.getItem('asset_track_token');
-      const response = await fetch('/api/assets', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: submitData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        alert(`Failed to create asset: ${errorData.message || response.statusText}`);
-        return;
-      }
-
-      const newAsset = await response.json();
-
-      setAssets(prev => [newAsset, ...prev]);
-      setLastAddedAsset(newAsset);
-
-      if (type === 'another') {
-        setFormData({
-          name: '', condition: 'Brand New', category: '', serialNumber: '', description: '',
-          purchaseDate: new Date().toISOString().split('T')[0], purchasePrice: '',
-          warrantyExpiry: '', assignedTo: '', manager: '', department: '', location: ''
-        });
-        setUserSearch('');
-        setReceiptFile(null);
-      } else {
-        setShowSuccess(true);
-      }
-    } catch (err) {
-      console.error("Error creating asset", err);
-      alert("An error occurred while creating the asset");
-    } finally {
-      setIsCreatingAsset(false);
-    }
-  };
-
-  // handleReportSubmit removed - using global modal from App.tsx via onReportAsset prop
-
   const getStatusColor = (status: AssetStatus) => {
     switch (status) {
-      case AssetStatus.ACTIVE: return 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400';
-      case AssetStatus.MAINTENANCE: return 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400';
-      case AssetStatus.PENDING: return 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400';
-      case AssetStatus.LOST: return 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400';
-      case AssetStatus.DECOMMISSIONED: return 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400';
-      default: return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-400';
+      case AssetStatus.ACTIVE: return 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400';
+      case AssetStatus.MAINTENANCE: return 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400';
+      case AssetStatus.PENDING: return 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400';
+      case AssetStatus.LOST: return 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400';
+      case AssetStatus.DECOMMISSIONED: return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400';
+      default: return 'bg-slate-50 dark:bg-slate-800 text-slate-500';
     }
+  };
+
+  const getCategoryIcon = (cat: string) => {
+    const c = cat.toLowerCase();
+    if (c.includes('laptop')) return 'laptop_mac';
+    if (c.includes('monitor')) return 'monitor';
+    if (c.includes('phone') || c.includes('mobile')) return 'smartphone';
+    return 'inventory_2';
+  };
+
+  const [isImportingBusy, setIsImportingBusy] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+
+  const processImport = async (file: File) => {
+    setIsImportingBusy(true);
+    setImportProgress(10);
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(l => l.trim().length > 0);
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        
+        const data = lines.slice(1).map(line => {
+          const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+          const entry: any = {};
+          headers.forEach((header, i) => {
+            // Map common CSV headers to our internal field names
+            const h = header.replace(/\s+/g, '');
+            if (h === 'name' || h === 'assetname') entry.name = values[i];
+            else if (h === 'category') entry.category = values[i];
+            else if (h === 'serial' || h === 'serialnumber') entry.serialNumber = values[i];
+            else if (h === 'price' || h === 'purchaseprice') entry.purchasePrice = values[i];
+            else if (h === 'date' || h === 'purchasedate') entry.purchaseDate = values[i];
+            else if (h === 'condition') entry.condition = values[i];
+            else if (h === 'location') entry.location = values[i];
+            else if (h === 'department') entry.department = values[i];
+            else if (h === 'manager') entry.manager = values[i];
+            else if (h === 'assignedto' || h === 'user' || h === 'owner') entry.assignedTo = values[i];
+            else if (h === 'description') entry.description = values[i];
+          });
+          return entry;
+        });
+
+        setImportProgress(40);
+        const token = localStorage.getItem('asset_track_token');
+        const res = await fetch('/api/assets/bulk-create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(data)
+        });
+
+        if (res.ok) {
+          const newAssets = await res.json();
+          setAssets(prev => [...newAssets, ...prev]);
+          setImportProgress(100);
+          setTimeout(() => {
+            setIsImporting(false);
+            setIsImportingBusy(false);
+            setImportProgress(0);
+          }, 800);
+        } else {
+           throw new Error('Import failed at storage level');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Failed to process CSV. Ensure valid format.');
+        setIsImportingBusy(false);
+      }
+    };
+    reader.readAsText(file);
   };
 
   const superAdminModals = (
@@ -651,66 +403,50 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       {isReassigningAssetId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsReassigningAssetId(null)}></div>
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-fade-in flex flex-col">
-            <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800/80">
-              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mb-4">
-                <span className="material-symbols-outlined text-2xl font-black">swap_horiz</span>
-              </div>
-              <h2 className="text-xl font-black text-slate-900 dark:text-white">Reassign Asset</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 font-bold mt-1">Select a new user to assign this asset to. The current assignment will be cancelled.</p>
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-fade-in flex flex-col">
+            <div className="p-8 border-b border-slate-100 dark:border-slate-800">
+               <div className="flex items-center gap-4">
+                 <div className="w-14 h-14 bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center rounded-2xl">
+                   <span className="material-symbols-outlined text-3xl font-black">person_add</span>
+                 </div>
+                 <div>
+                   <h2 className="text-xl font-black tracking-tight dark:text-white leading-tight">Reassign Asset</h2>
+                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Select target staff</p>
+                 </div>
+               </div>
             </div>
-
-            <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50 flex-1 overflow-visible">
-              <div className="relative">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
-                <input
-                  type="text"
-                  placeholder="Search staff to reassign..."
-                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all dark:text-white font-bold text-sm shadow-sm"
-                  value={reassignUserSearch}
-                  onChange={e => setReassignUserSearch(e.target.value)}
-                />
-              </div>
-
-              <div className="mt-4 max-h-60 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-inner">
-                {filteredReassignUsers.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-sm font-bold">No users found</div>
-                ) : (
-                  filteredReassignUsers.map(u => {
-                    const displayName = u.firstName ? `${u.firstName} ${u.surname}` : u.name;
-                    const deptName = u.department?.name || u.department || 'Unknown';
-                    const currentAsset = assets.find(a => a.id === isReassigningAssetId);
-                    const isAlreadyAssignedToUser = currentAsset?.assignedTo === u.userId || currentAsset?.assignedTo === u.id;
-                    return (
-                      <div
+            <div className="p-8 space-y-6">
+               <div className="relative group">
+                 <input
+                   type="text"
+                   autoFocus
+                   placeholder="Search employee name..."
+                   className="w-full pl-12 pr-6 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 transition-all font-bold dark:text-white text-sm outline-none"
+                   value={reassignUserSearch}
+                   onChange={e => setReassignUserSearch(e.target.value)}
+                 />
+                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors">search</span>
+               </div>
+               <div className="max-h-64 overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
+                 {filteredReassignUsers.map(u => {
+                   const displayName = u.firstName ? `${u.firstName} ${u.surname}` : u.name;
+                   return (
+                     <button
                         key={u.id}
-                        onClick={() => !isAlreadyAssignedToUser && handleReassign(u)}
-                        className={`px-4 py-3 cursor-pointer flex items-center gap-3 border-b border-slate-100 dark:border-slate-700/50 last:border-0 transition-colors ${
-                          isSubmittingReassign || isAlreadyAssignedToUser ? 'opacity-50 pointer-events-none bg-slate-50 dark:bg-slate-900' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                        }`}
-                      >
-                        <img src={u.avatar || `https://ui-avatars.com/api/?name=${displayName}`} className="w-8 h-8 rounded-full object-cover" alt="" />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-xs dark:text-white truncate">{displayName}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">{deptName}</p>
-                        </div>
-                        {isAlreadyAssignedToUser && <span className="text-[10px] font-black uppercase text-slate-400">Current</span>}
-                        {isSubmittingReassign && <span className="material-symbols-outlined text-slate-400 animate-spin">refresh</span>}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </div>
-
-            <div className="p-6 md:p-8 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-              <button
-                onClick={() => setIsReassigningAssetId(null)}
-                disabled={isSubmittingReassign}
-                className="px-6 py-2.5 rounded-xl font-bold text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors uppercase tracking-widest"
-              >
-                Cancel
-              </button>
+                        onClick={() => handleReassign(u)}
+                        disabled={isSubmittingReassign}
+                        className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-white dark:hover:bg-slate-800 border-2 border-transparent hover:border-slate-100 dark:hover:border-slate-700 transition-all text-left"
+                     >
+                       <img src={u.avatar || `https://ui-avatars.com/api/?name=${displayName}`} className="w-10 h-10 rounded-full border-2 border-white dark:border-slate-700 shadow-sm" alt="" />
+                       <div className="flex-1 min-w-0">
+                         <p className="font-bold text-sm dark:text-white truncate">{displayName}</p>
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{u.department?.name || u.department || 'General'}</p>
+                       </div>
+                       {isSubmittingReassign ? <span className="material-symbols-outlined text-blue-500 animate-spin">sync</span> : <span className="material-symbols-outlined text-slate-300">chevron_right</span>}
+                     </button>
+                   );
+                 })}
+               </div>
             </div>
           </div>
         </div>
@@ -719,31 +455,23 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       {/* Decommission Modal */}
       {isDecommissioningAssetId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsDecommissioningAssetId(null)}></div>
-          <div className="relative bg-white dark:bg-slate-950 w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in border border-pink-500/50 p-8 md:p-12 text-center space-y-8">
-            <div className="w-16 md:w-20 h-16 md:h-20 bg-pink-100 dark:bg-pink-900/30 text-pink-600 rounded-full flex items-center justify-center mx-auto animate-pulse">
-              <span className="material-symbols-outlined text-4xl">warning</span>
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsDecommissioningAssetId(null)}></div>
+          <div className="relative bg-white dark:bg-slate-950 w-full max-w-lg rounded-[3rem] shadow-2xl p-10 md:p-14 text-center space-y-8 animate-fade-in border border-red-500/20">
+            <div className="w-20 h-20 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-2xl flex items-center justify-center mx-auto shadow-xl shadow-red-500/10">
+              <span className="material-symbols-outlined text-4xl">delete_forever</span>
             </div>
             <div className="space-y-4">
-              <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Retire Equipment</h2>
-              <p className="text-sm md:text-base text-slate-500 dark:text-slate-400 font-bold leading-relaxed">
-                <span className="text-pink-600 font-black">CAUTION.</span> You are about to decommission <span className="font-black text-slate-900 dark:text-white">{assets.find(a => a.id === isDecommissioningAssetId)?.name}</span>.
-                It will be set to unassigned and marked as retired.
+              <h2 className="text-3xl font-black italic tracking-tighter dark:text-white uppercase">Retire Equipment?</h2>
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 leading-relaxed px-4">
+                This action will mark the asset as <span className="text-red-500 underline underline-offset-4">DECOMMISSIONED</span>. It will be removed from active inventory and cannot be reassigned without an audit review.
               </p>
             </div>
             <div className="flex flex-col gap-3">
-              <button
-                onClick={handleDecommission}
-                disabled={isSubmittingDecommission}
-                className="w-full h-14 flex items-center justify-center rounded-full bg-pink-600 text-white font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-pink-500/30 hover:bg-pink-500 transition-all disabled:opacity-50"
-              >
-                {isSubmittingDecommission ? <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span> : 'Confirm Retire'}
+              <button onClick={handleDecommission} disabled={isSubmittingDecommission} className="w-full py-5 rounded-2xl bg-red-600 text-white font-black uppercase text-xs tracking-widest shadow-2xl shadow-red-500/30 hover:bg-red-500 transition-all flex items-center justify-center gap-3">
+                {isSubmittingDecommission ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined text-lg">check_circle</span>}
+                Confirm Decommission
               </button>
-              <button
-                onClick={() => setIsDecommissioningAssetId(null)}
-                disabled={isSubmittingDecommission}
-                className="w-full py-4 rounded-full border-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-white font-black uppercase text-[10px] tracking-widest hover:bg-slate-50 dark:hover:bg-slate-900 transition-all"
-              >
+              <button onClick={() => setIsDecommissioningAssetId(null)} className="w-full py-5 rounded-2xl bg-slate-50 dark:bg-slate-900 text-slate-500 font-black uppercase text-xs tracking-widest hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-100 dark:border-slate-800">
                 Cancel
               </button>
             </div>
@@ -755,1285 +483,417 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
 
   if (viewingAsset) {
     return (
-      <div className="space-y-8 animate-fade-in pb-12">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-              <button onClick={() => setViewingAssetId(null)} className="hover:text-blue-600 transition-colors">Assets</button>
-              <span className="material-symbols-outlined text-xs">chevron_right</span>
-              <span className="text-blue-600 dark:text-blue-400">Asset Profile</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <h2 className="text-3xl md:text-4xl font-black tracking-tighter dark:text-white">{viewingAsset.name}</h2>
-              <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${getStatusColor(viewingAsset.status)}`}>
-                <span className="w-2 h-2 rounded-full bg-current animate-pulse"></span>
-                {viewingAsset.status}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg w-fit">
-              <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest">{viewingAsset.id}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-4 w-full md:w-auto">
-            {isSuperAdmin && (
-              <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-full border-[3px] border-slate-200 dark:border-slate-800 font-black text-xs uppercase tracking-widest text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-                <span className="material-symbols-outlined text-sm">qr_code_2</span>
-                QR Code
-              </button>
-            )}
-            {(isSuperAdmin || isAuditor) && (
-              <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-blue-600 text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all">
-                <span className="material-symbols-outlined text-sm">edit</span>
-                Edit
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-4 space-y-8 w-full">
-            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border-[3px] border-slate-100 dark:border-slate-800 p-10 flex flex-col items-center justify-center aspect-square shadow-sm transition-colors">
-              <div className="w-full h-full bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] flex items-center justify-center text-slate-200 dark:text-slate-700">
-                <span className="material-symbols-outlined text-[10rem]">
-                  {viewingAsset.category.toLowerCase().includes('laptop') ? 'laptop_mac' :
-                    viewingAsset.category.toLowerCase().includes('monitor') ? 'monitor' :
-                      viewingAsset.category.toLowerCase().includes('furniture') ? 'chair' : 'inventory_2'}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {viewingAsset.status === AssetStatus.PENDING && (viewingAsset.assignedTo === user.id || viewingAsset.assignedTo === user?.userId) && (
-                <button
-                  onClick={() => acceptAsset(viewingAsset.id)}
-                  className="group flex flex-col items-center justify-center gap-3 p-6 bg-blue-50 dark:bg-blue-900/20 border-[3px] border-blue-100 dark:border-blue-800 rounded-3xl hover:border-blue-600 hover:shadow-xl transition-all"
-                >
-                  <span className="material-symbols-outlined text-blue-400 group-hover:text-blue-600 transition-colors">check_circle</span>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">Accept</span>
-                </button>
-              )}
-              {isSuperAdmin && (
-                <button className="group flex flex-col items-center justify-center gap-3 p-6 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-slate-800 rounded-3xl hover:border-blue-600 hover:shadow-xl transition-all">
-                  <span className="material-symbols-outlined text-slate-400 group-hover:text-blue-600 transition-colors">print</span>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Label</span>
-                </button>
-              )}
-              <button className="group flex flex-col items-center justify-center gap-3 p-6 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-slate-800 rounded-3xl hover:border-amber-500 hover:shadow-xl transition-all">
-                <span className="material-symbols-outlined text-slate-400 group-hover:text-amber-500 transition-colors">build</span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Repair</span>
-              </button>
-              <button className="group flex flex-col items-center justify-center gap-3 p-6 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-slate-800 rounded-3xl hover:border-purple-600 hover:shadow-xl transition-all">
-                <span className="material-symbols-outlined text-slate-400 group-hover:text-purple-600 transition-colors">assignment_return</span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">InOut</span>
-              </button>
-
-              <button
-                onClick={() => onReportAsset?.(viewingAsset.id)}
-                className="group flex flex-col items-center justify-center gap-3 p-6 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-slate-800 rounded-3xl hover:border-red-600 hover:shadow-xl transition-all"
-              >
-                <span className="material-symbols-outlined text-slate-400 group-hover:text-red-600 transition-colors">history</span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Issue</span>
-              </button>
-              
-              {isSuperAdmin && viewingAsset.assignedTo && viewingAsset.status !== 'DECOMMISSIONED' && (
-                <button
-                  onClick={() => setIsReassigningAssetId(viewingAsset.id)}
-                  className="group flex flex-col items-center justify-center gap-3 p-6 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-indigo-800 rounded-3xl hover:border-indigo-600 hover:shadow-xl transition-all"
-                >
-                  <span className="material-symbols-outlined text-slate-400 group-hover:text-indigo-600 transition-colors">swap_horiz</span>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-indigo-600">Reassign</span>
-                </button>
-              )}
-
-              {isSuperAdmin && viewingAsset.status !== 'DECOMMISSIONED' && (
-                <button
-                  onClick={() => setIsDecommissioningAssetId(viewingAsset.id)}
-                  className="group flex flex-col items-center justify-center gap-3 p-6 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-pink-800 rounded-3xl hover:border-pink-600 hover:shadow-xl transition-all"
-                >
-                  <span className="material-symbols-outlined text-slate-400 group-hover:text-pink-600 transition-colors">delete_sweep</span>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-pink-600">Retire</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="lg:col-span-8 space-y-8 w-full">
-            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border-[3px] border-slate-100 dark:border-slate-800 p-6 md:p-10 shadow-sm overflow-hidden relative">
-              <div className="flex items-center gap-4 mb-10 border-b border-slate-50 dark:border-slate-800 pb-6">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-xl font-black">info</span>
-                </div>
-                <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white">General Info</h3>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                <div className="space-y-6">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset Name</p>
-                    <p className="text-lg font-bold dark:text-white">{viewingAsset.name}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Asset ID</p>
-                    <span className="px-3 py-1 bg-slate-50 dark:bg-slate-800 rounded font-mono text-sm font-bold dark:text-slate-300">{viewingAsset.id}</span>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Category</p>
-                    <p className="text-sm font-bold dark:text-white">{viewingAsset.category}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Model Number</p>
-                    <p className="text-sm font-bold dark:text-white">{viewingAsset.modelNumber || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Serial Number</p>
-                    <p className="font-mono text-sm font-bold dark:text-white">{viewingAsset.serialNumber || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Purchase Date</p>
-                    <p className="text-sm font-bold dark:text-white">{new Date(viewingAsset.purchaseDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                  </div>
-                </div>
-
-                <div className="md:col-span-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Description</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-bold bg-slate-50 dark:bg-slate-800/30 p-6 rounded-3xl">
-                    {viewingAsset.description || 'No description provided for this asset.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        {superAdminModals}
-      </div>
+      <AssetProfile
+        viewingAsset={viewingAsset}
+        user={user!}
+        onBack={() => setViewingAssetId(null)}
+        getStatusColor={getStatusColor}
+        acceptAsset={acceptAsset}
+        onReportAsset={onReportAsset}
+        setIsReassigningAssetId={setIsReassigningAssetId}
+        setIsDecommissioningAssetId={setIsDecommissioningAssetId}
+        allEmployees={allEmployees}
+        team={team}
+        superAdminModals={superAdminModals}
+      />
     );
   }
 
-  // Use the global search input here if passed as a prop, otherwise an empty string 
-  // currently filter is unused in the UI but could be hooked up later to the Header.
-
   return (
-    <div className="space-y-6 animate-fade-in relative">
-      {/* Upper Action Bar */}
-      <div className="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
-        <div>
-          <h2 className="text-3xl font-black tracking-tight dark:text-white">Asset Inventory</h2>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Manage and track company hardware assets</p>
+    <div className="space-y-8 animate-fade-in pb-12 relative">
+      {/* Premium Header */}
+      <div className="flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-end">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+             <div className="w-2 h-10 bg-blue-600 rounded-full"></div>
+             <h2 className="text-5xl font-black tracking-tighter dark:text-white">Assets</h2>
+          </div>
+          <p className="text-slate-400 font-bold ml-5">Centralized inventory control & lifecycle management.</p>
         </div>
 
-        <div className="flex flex-wrap gap-3 w-full lg:w-auto">
+        <div className="flex flex-wrap gap-4 w-full lg:w-auto">
           {canExportAndSeeUsers && (
-            <button
-              onClick={handleExportInventory}
-              disabled={isExporting}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all hover:bg-slate-50 dark:hover:bg-slate-800 shadow-sm ${isExporting ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
-            >
-              <span className={`material-symbols-outlined text-sm ${isExporting ? 'animate-spin' : ''}`}>
-                {isExporting ? 'sync' : 'download'}
-              </span>
-              {isExporting ? 'Wait' : 'Export'}
+            <button onClick={handleExportInventory} disabled={isExporting} className="btn-secondary group">
+              <span className={`material-symbols-outlined text-xl ${isExporting ? 'animate-spin' : 'group-hover:rotate-12 transition-transform'}`}>{isExporting ? 'sync' : 'cloud_download'}</span>
+              Export
             </button>
           )}
-
           {isAdmin && (
             <>
-              <button
-                onClick={() => setIsImporting(true)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-white dark:bg-slate-900 border-[3px] border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm active:scale-95"
-              >
-                <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
+              <button onClick={() => setIsImporting(true)} className="btn-secondary group">
+                <span className="material-symbols-outlined text-xl group-hover:-translate-y-1 transition-transform">upload_file</span>
                 Import
               </button>
-              <button
-                onClick={() => setIsAdding(true)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-3.5 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/20 active:scale-95"
-              >
-                <span className="material-symbols-outlined text-[18px]">add</span>
+              <button onClick={() => setIsAdding(true)} className="btn-primary group">
+                <span className="material-symbols-outlined text-xl group-hover:rotate-90 transition-transform">add</span>
                 Add Asset
               </button>
             </>
           )}
-
-          {assets.some(a => a.assignedTo === user.id || a.assignedTo === user?.userId) && (
-            <button
-              onClick={() => onReportAsset?.('')}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-3.5 bg-red-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-700 transition-all shadow-xl shadow-red-500/20 active:scale-95"
-            >
-              <span className="material-symbols-outlined text-[18px]">report_problem</span>
-              Report Issue
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Filter Toolbar */}
-      <div className="bg-white dark:bg-slate-900 p-2 md:p-3 rounded-[2rem] border-[3px] border-slate-100 dark:border-slate-800 shadow-sm">
-        <div className="flex flex-col sm:flex-row gap-2">
-          {/* Category Filter */}
-          <div className="relative flex-1 group">
-            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 pointer-events-none transition-colors text-lg">category</span>
+      {/* Filter & View Switcher Toolbar */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+        <div className="lg:col-span-8 flex flex-col md:flex-row gap-4 p-2 bg-white dark:bg-slate-900 rounded-[2.5rem] border-[3px] border-slate-100 dark:border-slate-800 shadow-sm">
+          <div className="flex-1 relative group">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none group-focus-within:text-blue-500">category</span>
             <select
-              className="w-full pl-12 pr-10 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border-none font-bold text-[10px] uppercase tracking-widest dark:text-white focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer appearance-none shadow-inner"
               value={selectedCategoryFilter}
               onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+              className="w-full pl-12 pr-6 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none font-black text-[10px] uppercase tracking-[0.2em] dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer"
             >
               <option value="All">All Categories</option>
               {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
-            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">expand_more</span>
+            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
           </div>
-
-          {/* Status Filter */}
-          <div className="relative flex-1 group">
-            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 pointer-events-none transition-colors text-lg">rule</span>
+          
+          <div className="flex-1 relative group">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none group-focus-within:text-blue-500">verified</span>
             <select
-              className="w-full pl-12 pr-10 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border-none font-bold text-[10px] uppercase tracking-widest dark:text-white focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer appearance-none shadow-inner"
               value={selectedStatusFilter}
               onChange={(e) => setSelectedStatusFilter(e.target.value)}
+              className="w-full pl-12 pr-6 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none font-black text-[10px] uppercase tracking-[0.2em] dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer"
             >
               <option value="All">All Statuses</option>
               {Object.values(AssetStatus).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">expand_more</span>
+            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
           </div>
 
-          {/* Location Filter */}
-          <div className="relative flex-1 group">
-            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 pointer-events-none transition-colors text-lg">location_on</span>
+          <div className="flex-1 relative group">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none group-focus-within:text-blue-500">location_on</span>
             <select
-              className="w-full pl-12 pr-10 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border-none font-bold text-[10px] uppercase tracking-widest dark:text-white focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer appearance-none shadow-inner"
               value={selectedLocationFilter}
               onChange={(e) => setSelectedLocationFilter(e.target.value)}
+              className="w-full pl-12 pr-6 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none font-black text-[10px] uppercase tracking-[0.2em] dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer"
             >
               <option value="All">All Locations</option>
               {assetLocations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
             </select>
-            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">expand_more</span>
+            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
           </div>
+        </div>
+
+        <div className="lg:col-span-4 flex justify-between items-center bg-slate-100 dark:bg-slate-800/50 p-1.5 rounded-full border border-slate-200 dark:border-slate-800">
+           <div className="flex gap-1">
+             <button onClick={() => setAssetTab('ALL')} className={`px-6 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${assetTab === 'ALL' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Inventory</button>
+             <button onClick={() => setAssetTab('PENDING_ME')} className={`px-6 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 ${assetTab === 'PENDING_ME' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:text-slate-600'}`}>
+               Assignments {pendingCount > 0 && <span className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px]">{pendingCount}</span>}
+             </button>
+           </div>
+           
+           <div className="flex gap-1 pr-1">
+             <button onClick={() => setViewMode('table')} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${viewMode === 'table' ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-sm' : 'text-slate-400'}`}><span className="material-symbols-outlined text-[20px]">table_rows</span></button>
+             <button onClick={() => setViewMode('grid')} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-sm' : 'text-slate-400'}`}><span className="material-symbols-outlined text-[20px]">grid_view</span></button>
+           </div>
         </div>
       </div>
 
-      {/* Tab Filters */}
-      <div className="flex gap-4 mb-6">
-        <button
-          onClick={() => setAssetTab('ALL')}
-          className={`px-6 py-2.5 rounded-full font-black text-xs uppercase tracking-widest transition-all ${assetTab === 'ALL' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xl' : 'bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-        >
-          All Assigned
-        </button>
-        <button
-          onClick={() => setAssetTab('PENDING_ME')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-black text-xs uppercase tracking-widest transition-all ${assetTab === 'PENDING_ME' ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30' : 'bg-white dark:bg-slate-900 border-2 border-blue-100 dark:border-blue-900/50 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`}
-        >
-          Pending Acceptance
-          {pendingCount > 0 && (
-            <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] ${assetTab === 'PENDING_ME' ? 'bg-white text-blue-600' : 'bg-blue-100 dark:bg-blue-900/50 text-blue-600'}`}>
-              {pendingCount}
-            </span>
-          )}
-        </button>
-      </div>
-
-      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] md:rounded-[3rem] border border-slate-100 dark:border-slate-800/80 overflow-hidden shadow-2xl shadow-slate-200/20 dark:shadow-black/20 transition-colors mb-8">
-        <div className="overflow-x-auto scrollbar-hide">
-          <table className="w-full text-left min-w-[800px] border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 dark:bg-slate-800/50 backdrop-blur-sm border-b-2 border-slate-100 dark:border-slate-800">
-                <th className="px-8 py-5 w-16">
-                  <div className="flex items-center justify-center">
-                    <label className="relative flex items-center justify-center cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        className="peer sr-only"
-                        checked={
-                          filteredAssets.filter(a =>
-                            (a.status === AssetStatus.PENDING && (isAdmin || a.assignedTo === user.id || a.assignedTo === user?.userId)) ||
-                            (isAdmin && (!a.assignedTo || a.status === 'IDLE'))
-                          ).length > 0 &&
-                          selectedAssetIds.length === filteredAssets.filter(a =>
-                            (a.status === AssetStatus.PENDING && (isAdmin || a.assignedTo === user.id || a.assignedTo === user?.userId)) ||
-                            (isAdmin && (!a.assignedTo || a.status === 'IDLE'))
-                          ).length
-                        }
-                        onChange={toggleSelectAll}
+      {/* Main Content Area */}
+      {viewMode === 'table' ? (
+        <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm transition-all hover:shadow-xl hover:shadow-slate-200/20 dark:hover:shadow-none">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
+                  <th className="px-8 py-6 w-20">
+                    <div className="flex items-center justify-center">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedAssetIds.length > 0 && selectedAssetIds.length === filteredAssets.length} 
+                        onChange={toggleSelectAll} 
+                        className="w-5 h-5 rounded-lg border-2 border-slate-200 dark:border-slate-700 checked:bg-blue-600 transition-all cursor-pointer accent-blue-600"
                       />
-                      <div className="w-5 h-5 md:w-6 md:h-6 rounded-lg border-[2.5px] border-slate-300 dark:border-slate-600 peer-checked:bg-blue-600 peer-checked:border-blue-600 dark:peer-checked:bg-blue-500 dark:peer-checked:border-blue-500 transition-all duration-200 ease-out group-hover:border-blue-400"></div>
-                      <span className="material-symbols-outlined absolute text-white text-[16px] md:text-[18px] opacity-0 peer-checked:opacity-100 peer-checked:scale-100 scale-50 transition-all duration-300 pointer-events-none drop-shadow-sm font-black">check</span>
-                    </label>
-                  </div>
-                </th>
-                <th className="px-4 py-5 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">Asset ID</th>
-                <th className="px-8 py-5 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">Name & Category</th>
-                {canExportAndSeeUsers && <th className="px-8 py-5 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">User</th>}
-                <th className="px-8 py-5 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">Dept</th>
-                <th className="px-8 py-5 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">Status</th>
-                {isAdmin && <th className="px-8 py-5 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">Price</th>}
-                <th className="px-8 py-5 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100/80 dark:divide-slate-800/80">
-              {filteredAssets.map((asset) => {
-                const assignedUser = allEmployees.find(u => u.id === asset.assignedTo || u.userId === asset.assignedTo) || team.find(u => u.id === asset.assignedTo);
-                const canSelect =
-                  (asset.status === AssetStatus.PENDING && (isAdmin || asset.assignedTo === user.id || asset.assignedTo === user?.userId)) ||
-                  (isAdmin && (!asset.assignedTo || asset.status === 'IDLE'));
-
-                return (
-                  <tr
-                    key={asset.id}
-                    onClick={() => setViewingAssetId(asset.id)}
-                    className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-200 group cursor-pointer ${selectedAssetIds.includes(asset.id) ? 'bg-blue-50/40 dark:bg-blue-900/10 hover:bg-blue-50/60 dark:hover:bg-blue-900/20' : ''}`}
-                  >
-                    <td className="px-8 py-6">
-                      <div className="flex items-center justify-center">
-                        {canSelect && (
-                          <label className="relative flex items-center justify-center cursor-pointer group/checkbox" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              className="peer sr-only"
-                              checked={selectedAssetIds.includes(asset.id)}
-                              onChange={(e) => toggleSelectAsset(asset.id, e as any)}
-                            />
-                            <div className="w-5 h-5 md:w-6 md:h-6 rounded-lg border-[2.5px] border-slate-300 dark:border-slate-600 peer-checked:bg-blue-600 peer-checked:border-blue-600 dark:peer-checked:bg-blue-500 dark:peer-checked:border-blue-500 transition-all duration-200 ease-out group-hover/checkbox:border-blue-400"></div>
-                            <span className="material-symbols-outlined absolute text-white text-[16px] md:text-[18px] opacity-0 peer-checked:opacity-100 peer-checked:scale-100 scale-50 transition-all duration-300 pointer-events-none drop-shadow-sm font-black">check</span>
-                          </label>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-6">
-                      <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-slate-300 dark:text-slate-700 group-hover:text-blue-600 transition-colors">qr_code_2</span>
-                        <span className="font-mono text-sm font-bold dark:text-slate-200">{asset.id}</span>
-                      </div>
-                    </td>
-                    <td className="px-8 py-6">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-slate-900 dark:text-white truncate max-w-[120px] md:max-w-none">{asset.name}</p>
-                          {asset.tags?.map(tag => (
-                            <div key={tag} className={`w-2 h-2 rounded-full ${tag}`}></div>
-                          ))}
+                    </div>
+                  </th>
+                  <th className="px-4 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">ID / Info</th>
+                  <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Custodian</th>
+                  <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Status & Health</th>
+                  <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                {filteredAssets.length > 0 ? filteredAssets.map(asset => {
+                  const assignedUser = allEmployees.find(u => u.id === asset.assignedTo || u.userId === asset.assignedTo) || team.find(u => u.id === asset.assignedTo);
+                  const isSelected = selectedAssetIds.includes(asset.id);
+                  return (
+                    <tr key={asset.id} onClick={() => setViewingAssetId(asset.id)} className={`group hover:bg-slate-50/80 dark:hover:bg-blue-900/10 cursor-pointer transition-all ${isSelected ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''}`}>
+                      <td className="px-8 py-8" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-center">
+                          <input 
+                            type="checkbox" 
+                            checked={isSelected} 
+                            onChange={(e) => toggleSelectAsset(asset.id, e as any)} 
+                            className="w-5 h-5 rounded-lg border-2 border-slate-200 dark:border-slate-700 checked:bg-blue-600 transition-all cursor-pointer accent-blue-600"
+                          />
                         </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">{asset.category}</p>
-                      </div>
-                    </td>
-                    {canExportAndSeeUsers && (
-                      <td className="px-8 py-6">
-                        <div className="flex items-center gap-2">
-                          {assignedUser ? (
-                            <>
-                              <img src={assignedUser?.avatar} className="w-6 h-6 rounded-full border border-slate-100 hidden sm:block bg-slate-200" alt="" />
-                              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-[80px]">{assignedUser.name || assignedUser?.firstName}</span>
-                            </>
-                          ) : (
-                            <div className="relative">
-                              {inlineAssignAssetId === asset.id ? (
-                                <div className="absolute top-1/2 -translate-y-1/2 left-0 z-50 w-56 flex flex-col shadow-xl rounded-xl overflow-hidden animate-fade-in border border-blue-500/20 bg-white dark:bg-slate-900 ring-4 ring-blue-500/10">
-                                  <div className="flex bg-slate-50 dark:bg-slate-800/80 p-1">
-                                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-slate-400">search</span>
-                                    <input
-                                      autoFocus
-                                      type="text"
-                                      placeholder="Search user to assign..."
-                                      className="w-full bg-transparent pl-8 pr-2 py-1.5 text-[10px] font-bold outline-none text-slate-900 dark:text-white placeholder-slate-400"
-                                      value={inlineUserSearch}
-                                      onChange={e => setInlineUserSearch(e.target.value)}
-                                    />
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); setInlineAssignAssetId(null); setInlineUserSearch(''); }}
-                                      className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
-                                    >
-                                      <span className="material-symbols-outlined text-[12px]">close</span>
-                                    </button>
-                                  </div>
-                                  <div className="max-h-40 overflow-y-auto scrollbar-hide py-1">
-                                    {isInlineAssigning === asset.id ? (
-                                      <div className="px-4 py-4 text-center">
-                                        <span className="material-symbols-outlined text-[16px] text-blue-500 animate-spin">refresh</span>
-                                      </div>
-                                    ) : filteredInlineUsers.length === 0 ? (
-                                      <div className="px-4 py-3 text-[9px] font-bold text-slate-500 text-center uppercase tracking-widest">No users found</div>
-                                    ) : (
-                                      filteredInlineUsers.map(u => {
-                                        const displayName = u.firstName ? `${u.firstName} ${u.surname}` : u.name;
-                                        const deptName = u.department?.name || u.department || 'Unknown';
-                                        return (
-                                          <div
-                                            key={u.id}
-                                            className="px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer flex items-center gap-2"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleInlineAssign(asset.id, u);
-                                            }}
-                                          >
-                                            <img src={u.avatar || `https://ui-avatars.com/api/?name=${displayName}`} className="w-5 h-5 rounded-full object-cover" alt="" />
-                                            <div>
-                                              <p className="font-bold text-[10px] dark:text-white leading-tight">{displayName}</p>
-                                              <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{deptName}</p>
-                                            </div>
-                                          </div>
-                                        );
-                                      })
-                                    )}
-                                  </div>
-                                </div>
-                              ) : (
-                                <button
-                                  disabled={!isAdmin}
-                                  onClick={(e) => {
-                                    if (isAdmin) {
-                                      e.stopPropagation();
-                                      setInlineAssignAssetId(asset.id);
-                                    }
-                                  }}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${isAdmin ? 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 cursor-pointer transition-colors group/assign' : 'cursor-default'}`}
-                                >
-                                  <span className={`text-[10px] font-bold ${isAdmin ? 'text-slate-600 dark:text-slate-400 group-hover/assign:text-slate-900 dark:group-hover/assign:text-white' : 'italic text-slate-400 dark:text-slate-500'}`}>Unassigned</span>
-                                  {isAdmin && <span className="material-symbols-outlined text-[12px] text-slate-400 group-hover/assign:text-slate-600">person_add</span>}
-                                </button>
-                              )}
+                      </td>
+                      <td className="px-4 py-8">
+                        <div className="flex items-center gap-5">
+                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 group-hover:bg-white group-hover:text-blue-600'}`}>
+                             <span className="material-symbols-outlined text-2xl">{getCategoryIcon(asset.category)}</span>
+                          </div>
+                          <div>
+                            <p className="font-black text-slate-900 dark:text-white leading-tight group-hover:text-blue-600 transition-colors uppercase tracking-tight">{asset.name}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                               <span className="text-xs font-mono font-bold text-slate-400 group-hover:text-slate-500">#{asset.id.slice(0, 8)}</span>
+                               <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{asset.category}</span>
                             </div>
-                          )}
+                          </div>
                         </div>
                       </td>
-                    )}
-                    <td className="px-8 py-6">
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{asset.department}</span>
-                    </td>
-                    <td className="px-8 py-6">
-                      <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${getStatusColor(asset.status)}`}>
-                        {asset.status}
-                      </span>
-                    </td>
-                    {isAdmin && (
-                      <td className="px-8 py-6">
-                        <span className="font-black text-xs text-slate-900 dark:text-white">₦{asset.purchasePrice.toLocaleString()}</span>
-                      </td>
-                    )}
-                    <td className="px-8 py-6 text-right">
-                      <div className="flex justify-end gap-2 items-center">
-                        {asset.status === AssetStatus.PENDING && (asset.assignedTo === user.id || asset.assignedTo === user?.userId) && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); acceptAsset(asset.id); }}
-                            disabled={isAcceptingAsset === asset.id}
-                            className={`px-4 py-1.5 flex items-center justify-center gap-1.5 bg-blue-600 text-white font-black rounded-full text-[10px] md:text-[11px] hover:bg-blue-700 transition shadow-md shadow-blue-500/20 active:scale-95 min-w-[80px] ${isAcceptingAsset === asset.id ? 'opacity-70 cursor-not-allowed' : ''}`}
-                          >
-                            {isAcceptingAsset === asset.id ? (
-                              <span className="material-symbols-outlined text-[14px] animate-spin">refresh</span>
+                      <td className="px-8 py-8">
+                        {assignedUser ? (
+                          <div className="flex items-center gap-3 bg-white dark:bg-slate-800/50 p-2 pr-4 rounded-2xl w-fit shadow-sm border border-slate-100 dark:border-slate-700/50 group-hover:border-blue-500/30 transition-all">
+                            <img src={assignedUser.avatar} className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700" alt="" />
+                            <div className="min-w-0">
+                               <p className="text-xs font-black dark:text-white leading-none mb-0.5">{assignedUser.name || assignedUser.firstName}</p>
+                               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{assignedUser.department || 'General'}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            {inlineAssignAssetId === asset.id ? (
+                              <div className="absolute top-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 shadow-2xl rounded-3xl border border-slate-100 dark:border-slate-800 p-3 animate-fade-in" onClick={e => e.stopPropagation()}>
+                                <input autoFocus placeholder="Find custodian..." className="w-full px-4 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-800 border-none rounded-xl mb-3 outline-none focus:ring-2 focus:ring-blue-600" value={inlineUserSearch} onChange={e => setInlineUserSearch(e.target.value)} />
+                                <div className="max-h-48 overflow-y-auto space-y-1 scrollbar-hide">
+                                  {filteredInlineUsers.map(u => (
+                                    <button key={u.id} className="w-full p-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-left rounded-xl transition-colors" onClick={() => handleInlineAssign(asset.id, u)}>
+                                      <p className="text-xs font-black dark:text-white leading-none mb-1">{u.firstName ? `${u.firstName} ${u.surname}` : u.name}</p>
+                                      <p className="text-[9px] font-bold text-slate-400 uppercase">{u.department || 'General'}</p>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
                             ) : (
-                              'Accept'
+                              <button onClick={e => { e.stopPropagation(); if(isAdmin) setInlineAssignAssetId(asset.id); }} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400 hover:text-blue-600 hover:border-blue-500/50 transition-all font-black text-[10px] uppercase tracking-[0.2em] group/btn">
+                                <span className="material-symbols-outlined text-[16px] group-hover/btn:scale-125 transition-transform">person_add</span>
+                                Unassigned
+                              </button>
                             )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-8 py-8">
+                        <div className="flex flex-col gap-2">
+                           <span className={`w-fit px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${getStatusColor(asset.status)} shadow-sm`}>{asset.status}</span>
+                           <div className="flex items-center gap-3">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{asset.location}</span>
+                              <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{asset.condition}</span>
+                           </div>
+                        </div>
+                      </td>
+                      <td className="px-8 py-8 text-right">
+                        {asset.status === AssetStatus.PENDING && (asset.assignedTo === user?.id || asset.assignedTo === user?.userId) && (
+                          <button 
+                            onClick={e => { e.stopPropagation(); acceptAsset(asset.id); }} 
+                            className="bg-blue-600 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all"
+                          >
+                             {isAcceptingAsset === asset.id ? 'Processing...' : 'Accept Assignment'}
                           </button>
                         )}
-                        <button className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white">
-                          <span className="material-symbols-outlined">more_vert</span>
+                        <button className="p-3 rounded-xl opacity-0 group-hover:opacity-100 hover:bg-white dark:hover:bg-slate-800 text-slate-500 transition-all">
+                           <span className="material-symbols-outlined">more_horiz</span>
                         </button>
-                      </div>
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={5} className="py-32 text-center space-y-4">
+                       <span className="material-symbols-outlined text-6xl text-slate-200 dark:text-slate-800">inventory_2</span>
+                       <div>
+                         <p className="text-lg font-black dark:text-white">No Assets Found</p>
+                         <p className="text-sm font-bold text-slate-400">Try adjusting your filters or search query.</p>
+                       </div>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fade-in">
+           {filteredAssets.length > 0 ? filteredAssets.map(asset => {
+             const isSelected = selectedAssetIds.includes(asset.id);
+             return (
+               <div 
+                 key={asset.id} 
+                 onClick={() => setViewingAssetId(asset.id)}
+                 className={`group relative bg-white dark:bg-slate-900 rounded-[2.5rem] border-2 p-6 cursor-pointer transition-all ${isSelected ? 'border-blue-600 shadow-2xl' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xl'}`}
+               >
+                 <button 
+                   onClick={e => toggleSelectAsset(asset.id, e as any)}
+                   className={`absolute top-6 left-6 w-6 h-6 rounded-lg border-2 z-10 transition-all flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 scale-0 group-hover:scale-100 opacity-0 group-hover:opacity-100'}`}
+                 >
+                   {isSelected && <span className="material-symbols-outlined text-xs">check</span>}
+                 </button>
 
-      {/* Bulk Operations Bar */}
+                 <div className="flex flex-col items-center text-center space-y-5 pt-4">
+                    <div className={`w-20 h-20 rounded-3xl flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 group-hover:scale-110 group-hover:text-blue-600 group-hover:bg-blue-50'}`}>
+                       <span className="material-symbols-outlined text-4xl">{getCategoryIcon(asset.category)}</span>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-black dark:text-white leading-tight uppercase tracking-tight truncate w-full px-2">{asset.name}</h3>
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{asset.category}</span>
+                        <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                        <span className="text-[10px] font-mono font-bold text-slate-400">#{asset.id.slice(0, 8)}</span>
+                      </div>
+                    </div>
+
+                    <div className="w-full pt-4 border-t border-slate-50 dark:border-slate-800 mt-2 flex items-center justify-between">
+                       <span className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest ${getStatusColor(asset.status)}`}>{asset.status}</span>
+                       <div className="flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-sm text-slate-300">location_on</span>
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{asset.location.split(',')[0]}</span>
+                       </div>
+                    </div>
+                 </div>
+               </div>
+             );
+           }) : (
+             <div className="col-span-full py-40 text-center space-y-4 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-slate-100 dark:border-slate-800">
+                <span className="material-symbols-outlined text-6xl text-slate-100 dark:text-slate-800">sentiment_dissatisfied</span>
+                <p className="font-black text-slate-400 uppercase tracking-widest">No matching results found</p>
+             </div>
+           )}
+        </div>
+      )}
+
+      {/* Premium Bulk Operations Bar */}
       {selectedAssetIds.length > 0 && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl px-2 sm:px-4 py-2 rounded-full shadow-2xl flex flex-wrap items-center justify-center gap-1 sm:gap-2 z-40 animate-fade-in border border-slate-200 dark:border-slate-800 ring-4 ring-black/5 max-w-[95vw]">
-          <div className="flex items-center gap-2 px-3 py-1 sm:px-4 sm:py-2 border-r border-slate-200 dark:border-slate-700">
-            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-[#1985f0] text-white flex items-center justify-center font-black text-[10px] sm:text-xs">{selectedAssetIds.length}</div>
-          </div>
-
-          <div className="flex items-center gap-1">
-            {!isOnlyUnassigned && (
-              <button onClick={() => setIsBulkTagging(true)} className="p-2 sm:p-3 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/10 text-amber-600 dark:text-amber-500 transition-all font-black" title="Tag">
-                <span className="material-symbols-outlined text-lg">sell</span>
-              </button>
-            )}
-
-            <div className="px-2 text-slate-400 dark:text-slate-500 font-mono text-[10px] font-black hidden sm:block">
-              ₦{selectedTotalValue.toLocaleString()}
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-8 bg-slate-900 dark:bg-[#020617] text-white px-10 py-5 rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] z-50 animate-bounce-in border border-white/10 backdrop-blur-3xl">
+          <div className="flex items-center gap-4 border-r border-white/10 pr-6">
+            <div className="flex -space-x-3">
+              {[...Array(Math.min(selectedAssetIds.length, 3))].map((_, i) => (
+                 <div key={i} className="w-10 h-10 rounded-full bg-blue-600 border-4 border-slate-900 flex items-center justify-center shadow-lg">
+                   <span className="material-symbols-outlined text-lg">inventory_2</span>
+                 </div>
+              ))}
             </div>
-
-            {canBulkAccept && (
-              <button
-                onClick={() => setIsBulkAccepting(true)}
-                className="flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-3 rounded-full bg-blue-600 text-white shadow-xl shadow-blue-500/30 hover:bg-blue-700 transition-all font-black text-[10px] uppercase tracking-widest ml-1"
-              >
-                <span className="material-symbols-outlined text-lg hidden sm:inline">check_circle</span>
-                Accept Selected
-              </button>
-            )}
-
-            {canBulkAssign && (
-              <button
-                onClick={() => setIsBulkAssigningModalOpen(true)}
-                className="flex items-center gap-2 px-6 py-3 rounded-full bg-indigo-600 text-white shadow-xl shadow-indigo-500/30 hover:bg-indigo-700 transition-all font-black text-[10px] uppercase tracking-widest ml-1"
-              >
-                <span className="material-symbols-outlined text-lg hidden sm:inline">person_add</span>
-                Assign to User
-              </button>
-            )}
-
-            {!isOnlyUnassigned && isAdmin && (
-              <button onClick={() => setIsBulkDecommissioning(true)} className="p-2 sm:p-3 rounded-full hover:bg-red-50 dark:hover:bg-red-900/10 text-red-500 transition-all font-black ml-1" title="Decommission">
-                <span className="material-symbols-outlined text-lg">delete_sweep</span>
-              </button>
-            )}
+            <div>
+              <p className="text-xl font-black leading-none">{selectedAssetIds.length}</p>
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Selected</p>
+            </div>
           </div>
-
-          <button
-            onClick={() => setSelectedAssetIds([])}
-            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 transition-all ml-1 sm:ml-2"
-          >
-            <span className="material-symbols-outlined text-sm">close</span>
+          
+          <div className="flex gap-4">
+            {!isOnlyUnassigned && <button onClick={() => setIsBulkTagging(true)} title="Bulk Tag" className="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center text-amber-500"><span className="material-symbols-outlined">sell</span></button>}
+            {canBulkAccept && <button onClick={() => setIsBulkAccepting(true)} className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-500 shadow-xl shadow-blue-500/20 transition-all">Accept Selected</button>}
+            {canBulkAssign && <button onClick={() => setIsBulkAssigningModalOpen(true)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-500 shadow-xl shadow-indigo-500/20 transition-all">Assign Batch</button>}
+            {!isOnlyUnassigned && isAdmin && <button onClick={() => setIsBulkDecommissioning(true)} title="Batch Decommission" className="w-12 h-12 rounded-2xl bg-white/5 hover:bg-red-500/20 transition-all flex items-center justify-center text-red-500"><span className="material-symbols-outlined">delete</span></button>}
+          </div>
+          
+          <button onClick={() => setSelectedAssetIds([])} className="ml-2 w-10 h-10 rounded-full hover:bg-white/10 text-slate-400 transition-colors flex items-center justify-center">
+            <span className="material-symbols-outlined">close</span>
           </button>
         </div>
       )}
 
-      {/* Bulk Assign Modal */}
-      {isBulkAssigningModalOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsBulkAssigningModalOpen(false)}></div>
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-fade-in flex flex-col">
-            <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800/80">
-              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mb-4">
-                <span className="material-symbols-outlined text-2xl font-black">person_add</span>
-              </div>
-              <h2 className="text-xl font-black text-slate-900 dark:text-white">Assign {selectedAssetIds.length} Assets</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 font-bold mt-1">Select a user to assign these assets to.</p>
-            </div>
-
-            <div className="p-6 md:p-8 bg-slate-50/50 dark:bg-slate-900/50 flex-1 overflow-visible">
-              <div className="relative">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
-                <input
-                  type="text"
-                  placeholder="Search staff to assign..."
-                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all dark:text-white font-bold text-sm shadow-sm"
-                  value={bulkAssignUserSearch}
-                  onChange={e => setBulkAssignUserSearch(e.target.value)}
-                />
-              </div>
-
-              <div className="mt-4 max-h-60 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-inner">
-                {filteredBulkUsers.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-sm font-bold">No users found</div>
-                ) : (
-                  filteredBulkUsers.map(u => {
-                    const displayName = u.firstName ? `${u.firstName} ${u.surname}` : u.name;
-                    const deptName = u.department?.name || u.department || 'Unknown';
-                    return (
-                      <div
-                        key={u.id}
-                        onClick={() => handleBulkAssign(u)}
-                        className={`px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer flex items-center gap-3 border-b border-slate-100 dark:border-slate-700/50 last:border-0 transition-colors ${isBulkAssigning ? 'opacity-50 pointer-events-none' : ''}`}
-                      >
-                        <img src={u.avatar || `https://ui-avatars.com/api/?name=${displayName}`} className="w-8 h-8 rounded-full object-cover" alt="" />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-xs dark:text-white truncate">{displayName}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">{deptName}</p>
-                        </div>
-                        {isBulkAssigning && <span className="material-symbols-outlined text-slate-400 animate-spin">refresh</span>}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </div>
-
-            <div className="p-6 md:p-8 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-              <button
-                onClick={() => setIsBulkAssigningModalOpen(false)}
-                disabled={isBulkAssigning}
-                className="px-6 py-2.5 rounded-xl font-bold text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors uppercase tracking-widest"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {superAdminModals}
-
-      {/* Stern Warning: Decommission Modal */}
-      {isBulkDecommissioning && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsBulkDecommissioning(false)}></div>
-          <div className="relative bg-white dark:bg-slate-950 w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in border border-red-500/50 p-8 md:p-12 text-center space-y-8">
-            <div className="w-16 md:w-20 h-16 md:h-20 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mx-auto animate-pulse">
-              <span className="material-symbols-outlined text-4xl">warning</span>
-            </div>
-            <div className="space-y-4">
-              <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Stern Warning</h2>
-              <p className="text-sm md:text-base text-slate-500 dark:text-slate-400 font-bold leading-relaxed">
-                <span className="text-red-600 font-black">IRREVERSIBLE ACTION.</span> You are about to decommission <span className="font-black text-slate-900 dark:text-white">{selectedAssetIds.length} assets</span>.
-                They will be permanently removed from active inventory.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={applyBulkDecommission}
-                className="w-full py-4 rounded-full bg-red-600 text-white font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-red-500/30 hover:bg-red-500 transition-all"
-              >
-                Confirm Decommission
-              </button>
-              <button
-                onClick={() => setIsBulkDecommissioning(false)}
-                className="w-full py-4 rounded-full border-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-white font-black uppercase text-[10px] tracking-widest hover:bg-slate-50 dark:hover:bg-slate-900 transition-all"
-              >
-                Abort
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Color Tagging Modal */}
-      {isBulkTagging && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-md" onClick={() => setIsBulkTagging(false)}></div>
-          <div className="relative bg-white dark:bg-slate-950 w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-800 p-8 space-y-8">
-            <div className="text-center">
-              <h2 className="text-2xl font-black dark:text-white">Apply Visual Tags</h2>
-              <p className="text-sm font-bold text-slate-400">Mark <span className="text-blue-600">{selectedAssetIds.length} assets</span></p>
-            </div>
-
-            <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
-              {[
-                { name: 'Priority', color: 'bg-red-500' },
-                { name: 'System', color: 'bg-blue-500' },
-                { name: 'Operational', color: 'bg-green-500' },
-                { name: 'Warning', color: 'bg-amber-500' },
-                { name: 'Special', color: 'bg-purple-500' }
-              ].map(tag => (
-                <button
-                  key={tag.color}
-                  onClick={() => setTagSelection(tag.color)}
-                  className={`flex flex-col items-center gap-2 p-2 rounded-2xl transition-all ${tagSelection === tag.color ? 'bg-slate-100 dark:bg-slate-800 ring-2 ring-blue-600' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                >
-                  <div className={`w-8 h-8 rounded-full ${tag.color} shadow-lg`}></div>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 truncate w-full text-center">{tag.name}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={() => setIsBulkTagging(false)}
-                className="flex-1 py-4 rounded-full border-2 border-slate-200 dark:border-slate-800 font-black text-[10px] uppercase tracking-widest text-slate-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={applyBulkTag}
-                disabled={!tagSelection}
-                className={`flex-1 py-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-[10px] uppercase tracking-widest shadow-xl transition-all ${!tagSelection ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'}`}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {/* Bulk Accept Summary */}
-      {isBulkAccepting && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-md" onClick={() => setIsBulkAccepting(false)}></div>
-          <div className="relative bg-white dark:bg-slate-950 w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-800 flex flex-col">
-            <div className="p-8 md:p-10 text-center space-y-6">
-              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center mx-auto">
-                <span className="material-symbols-outlined text-4xl">check_circle</span>
-              </div>
-              <div>
-                <h2 className="text-2xl md:text-3xl font-black dark:text-white">Bulk Accept</h2>
-                <p className="text-sm text-slate-500 font-bold">Accept assignment of <span className="text-slate-900 dark:text-white font-black">{selectedAssetIds.length} assets</span>.</p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  onClick={() => setIsBulkAccepting(false)}
-                  className="flex-1 py-4 rounded-full border-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-white font-black uppercase text-[10px] tracking-widest hover:bg-slate-50 dark:hover:bg-slate-900 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={applyBulkAccept}
-                  disabled={isBulkAcceptingState}
-                  className={`flex-1 flex justify-center items-center py-4 rounded-full bg-blue-600 text-white font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-blue-500/30 hover:bg-blue-700 transition-all ${isBulkAcceptingState ? 'opacity-70 cursor-not-allowed' : ''}`}
-                >
-                  {isBulkAcceptingState ? <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span> : 'Accept Assets'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Import Modal */}
+      {/* IMPORT MODAL */}
       {isImporting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-md" onClick={() => setIsImporting(false)}></div>
-          <div className="relative bg-white dark:bg-slate-950 w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-800 flex flex-col">
-            <div className="p-8 border-b border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 flex justify-between items-center">
-              <div>
-                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
-                  <span>Assets</span>
-                  <span className="material-symbols-outlined text-xs">chevron_right</span>
-                  <span className="text-blue-600 dark:text-blue-400">Import Assets</span>
-                </div>
-                <h2 className="text-2xl md:text-3xl font-black tracking-tight dark:text-white">Bulk Import</h2>
-              </div>
-              <button onClick={() => setIsImporting(false)} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-400">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div className="p-6 md:p-10 space-y-6 md:space-y-10">
-              <div className="flex flex-col md:flex-row gap-6 items-start bg-slate-50 dark:bg-slate-900/50 p-6 md:p-8 rounded-[2rem] border-2 border-slate-100 dark:border-slate-800">
-                <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-2xl md:text-3xl">download</span>
-                </div>
-                <div className="space-y-3">
-                  <h4 className="text-base md:text-lg font-black dark:text-white leading-none">Template</h4>
-                  <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 font-bold leading-relaxed">Download our CSV template to prepare your data.</p>
-                  <button
-                    onClick={handleDownloadTemplate}
-                    className="px-6 py-2.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest shadow-xl"
-                  >
-                    Get CSV
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-10 md:p-16 border-4 border-dashed border-slate-200 dark:border-slate-800 rounded-[3rem] flex flex-col items-center justify-center gap-4 group cursor-pointer hover:border-blue-600 transition-all bg-slate-50/50 dark:bg-slate-800/20 relative">
-                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept=".csv" />
-                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white dark:bg-slate-900 shadow-xl flex items-center justify-center text-slate-400 group-hover:text-blue-600 transition-all">
-                  <span className="material-symbols-outlined text-3xl md:text-4xl">upload_file</span>
-                </div>
-                <div className="text-center">
-                  <p className="text-base md:text-lg font-black dark:text-white">Upload File</p>
-                  <p className="text-xs md:text-sm font-bold text-slate-400">Ready to sync</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 md:p-8 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 flex gap-4">
-              <button
-                onClick={() => setIsImporting(false)}
-                className="flex-1 py-4 rounded-full font-black text-xs tracking-tight border-2 border-slate-200 dark:border-slate-700 dark:text-white"
-              >
-                Cancel
-              </button>
-              <button className="flex-1 py-4 rounded-full bg-blue-600 text-white font-black text-xs tracking-tight shadow-xl">
-                Process
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* NEW ASSET WORKFLOW */}
-      {isAdding && createPortal((
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-8 overflow-y-auto">
-          <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-2xl" onClick={() => !showSuccess && setIsAdding(false)}></div>
-
-          <div className="relative bg-white dark:bg-slate-950 w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-800 flex flex-col min-h-0 shrink-0">
-
-            {!showSuccess ? (
-              <>
-                <div className="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md flex justify-between items-center shrink-0">
-                  <div>
-                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
-                      <button onClick={() => setIsAdding(false)} className="hover:text-blue-600">Assets</button>
-                      <span className="material-symbols-outlined text-xs">chevron_right</span>
-                      <span className="text-blue-600 dark:text-blue-400">Add New Asset</span>
-                    </div>
-                    <h2 className="text-2xl md:text-3xl font-black tracking-tight dark:text-white">Register Equipment</h2>
-                  </div>
-                  <button onClick={() => setIsAdding(false)} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-400">
-                    <span className="material-symbols-outlined">close</span>
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-12 scrollbar-hide">
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-sm font-black">info</span>
-                      </div>
-                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">1. Basic Information</h3>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Asset Name {errors.name && <span className="text-red-500 lowercase font-bold" aria-live="polite">— Required</span>}</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. MacBook Pro 16-inch"
-                          className={`w-full px-6 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 ${errors.name ? 'border-red-500/50' : 'border-transparent'} outline-none focus:ring-2 focus:ring-blue-600 transition-all dark:text-white font-bold shadow-inner text-sm`}
-                          value={formData.name}
-                          onChange={e => { setFormData({ ...formData, name: e.target.value }); if (errors.name) setErrors({ ...errors, name: false }); }}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Asset Condition</label>
-                        <select
-                          className="w-full px-6 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 border-transparent outline-none focus:ring-2 focus:ring-blue-600 transition-all dark:text-white font-bold shadow-inner text-sm"
-                          value={formData.condition}
-                          onChange={e => setFormData({ ...formData, condition: e.target.value })}
-                        >
-                          <option>Brand New</option>
-                          <option>Good/Like New</option>
-                          <option>Fairly Good</option>
-                          <option>Bad Condition</option>
-                          <option>Very bad Condition</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Category {errors.category && <span className="text-red-500 lowercase font-bold">— Required</span>}</label>
-                        <div className="flex gap-2">
-                          {isCreatingCategory ? (
-                            <div className="flex-1 space-y-3 p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-3xl animate-fade-in border border-blue-100 dark:border-blue-900/30">
-                              <div className="flex gap-3">
-                                <div className="flex-1 space-y-1">
-                                  <label className="text-[9px] font-black uppercase tracking-widest text-blue-600 ml-1">New Category</label>
-                                  <input
-                                    autoFocus
-                                    type="text"
-                                    className="w-full px-5 py-2.5 rounded-xl bg-white dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 outline-none font-bold text-sm shadow-sm"
-                                    placeholder="e.g. Laptop"
-                                    value={newCategoryInput}
-                                    onChange={e => setNewCategoryInput(e.target.value)}
-                                  />
-                                </div>
-                                <div className="flex-1 space-y-1">
-                                  <label className="text-[9px] font-black uppercase tracking-widest text-blue-600 ml-1">Managing Admin</label>
-                                  <div className="relative">
-                                    <select
-                                      value={selectedSA}
-                                      onChange={e => setSelectedSA(e.target.value)}
-                                      className="w-full px-5 py-2.5 rounded-xl bg-white dark:bg-slate-800 border-2 border-transparent focus:border-blue-500 outline-none font-bold text-xs shadow-sm appearance-none cursor-pointer"
-                                    >
-                                      <option value="">Select...</option>
-                                      {superAdmins.map(sa => (
-                                        <option key={sa.id} value={sa.id}>{sa.email}</option>
-                                      ))}
-                                    </select>
-                                    <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-sm">expand_more</span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={async () => {
-                                    if (newCategoryInput && selectedSA) {
-                                      try {
-                                        const token = localStorage.getItem('asset_track_token');
-                                        const res = await fetch('/api/asset-categories', {
-                                          method: 'POST',
-                                          headers: {
-                                            'Content-Type': 'application/json',
-                                            Authorization: `Bearer ${token}`
-                                          },
-                                          body: JSON.stringify({
-                                            name: newCategoryInput,
-                                            managedById: selectedSA || undefined
-                                          })
-                                        });
-                                        if (res.ok) {
-                                          const added = await res.json();
-                                          setCategories([...categories, added]);
-                                          setFormData({ ...formData, category: added.name });
-                                          setNewCategoryInput('');
-                                          setSelectedSA('');
-                                          setIsCreatingCategory(false);
-                                        }
-                                      } catch (err) {
-                                        console.error("Failed to add category via modal", err);
-                                      }
-                                    }
-                                  }}
-                                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
-                                >
-                                  <span className="material-symbols-outlined text-sm font-black">check</span>
-                                  Add Category
-                                </button>
-                                <button onClick={() => { setIsCreatingCategory(false); setSelectedSA(''); }} className="px-5 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-300 dark:hover:bg-slate-700 transition-all">
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex-1 flex gap-2">
-                              <select
-                                className={`flex-1 px-6 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 ${errors.category ? 'border-red-500/50' : 'border-transparent'} outline-none focus:ring-2 focus:ring-blue-600 transition-all dark:text-white font-bold shadow-inner text-sm`}
-                                value={formData.category}
-                                onChange={e => { setFormData({ ...formData, category: e.target.value }); if (errors.category) setErrors({ ...errors, category: false }); }}
-                              >
-                                <option value="">Select Category</option>
-                                {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                              </select>
-                              <button onClick={() => setIsCreatingCategory(true)} className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:scale-110 transition-all shadow-lg shadow-blue-500/20 shrink-0">
-                                <span className="material-symbols-outlined text-sm">add</span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-2 mt-3 px-2">
-                          {categories.map(c => (
-                            <div key={c.id} className="flex items-center gap-1 px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                              {c.name}
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    const token = localStorage.getItem('asset_track_token');
-                                    const res = await fetch(`/api/asset-categories/${c.id}`, {
-                                      method: 'DELETE',
-                                      headers: { Authorization: `Bearer ${token}` }
-                                    });
-                                    if (res.ok) setCategories(categories.filter(x => x.id !== c.id));
-                                  } catch (err) {
-                                    console.error("Failed to delete category via modal", err);
-                                  }
-                                }}
-                                className="material-symbols-outlined text-[14px] hover:text-red-500 transition-colors"
-                              >
-                                close
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Serial Number {errors.serialNumber && <span className="text-red-500 lowercase font-bold">— Required</span>}</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. SN-A2780-XYZ"
-                          className={`w-full px-6 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 ${errors.serialNumber ? 'border-red-500/50' : 'border-transparent'} outline-none focus:ring-2 focus:ring-blue-600 transition-all dark:text-white font-mono font-bold shadow-inner text-sm`}
-                          value={formData.serialNumber}
-                          onChange={e => { setFormData({ ...formData, serialNumber: e.target.value }); if (errors.serialNumber) setErrors({ ...errors, serialNumber: false }); }}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Purchase Amount {errors.purchasePrice && <span className="text-red-500 lowercase font-bold">— Required</span>}</label>
-                        <div className={`flex items-center bg-slate-50 dark:bg-slate-900 rounded-2xl px-6 py-3 border-2 ${errors.purchasePrice ? 'border-red-500/50' : 'border-transparent'} focus-within:ring-2 focus-within:ring-blue-600 transition-all shadow-inner`}>
-                          <span className="text-slate-400 font-bold mr-2 text-sm">₦</span>
-                          <input
-                            type="number"
-                            className="w-full bg-transparent border-none outline-none font-bold dark:text-white text-sm"
-                            placeholder="0.00"
-                            value={formData.purchasePrice}
-                            onChange={e => { setFormData({ ...formData, purchasePrice: e.target.value }); if (errors.purchasePrice) setErrors({ ...errors, purchasePrice: false }); }}
-                          />
-                          <span className="text-[10px] font-black text-slate-400 ml-2">NGN</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Purchase Date</label>
-                        <input
-                          type="date"
-                          className="w-full px-6 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 border-transparent outline-none focus:ring-2 focus:ring-blue-600 transition-all dark:text-white font-bold shadow-inner text-sm"
-                          value={formData.purchaseDate}
-                          onChange={e => setFormData({ ...formData, purchaseDate: e.target.value })}
-                        />
-                      </div>
-
-                      <div className="space-y-2 lg:col-span-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Description</label>
-                        <textarea
-                          rows={2}
-                          placeholder="Technical specifications and internal notes..."
-                          className="w-full px-6 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 border-transparent outline-none focus:ring-2 focus:ring-blue-600 transition-all dark:text-white font-bold shadow-inner text-sm resize-none"
-                          value={formData.description}
-                          onChange={e => setFormData({ ...formData, description: e.target.value })}
-                        ></textarea>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Warranty Expiry (Optional)</label>
-                        <input
-                          type="date"
-                          className="w-full px-6 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 border-transparent outline-none focus:ring-2 focus:ring-blue-600 transition-all dark:text-white font-bold shadow-inner text-sm"
-                          value={formData.warrantyExpiry}
-                          onChange={e => setFormData({ ...formData, warrantyExpiry: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-sm font-black">person</span>
-                      </div>
-                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">2. Assignment details</h3>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <div className="space-y-2 relative">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Assigned User {errors.assignedTo && <span className="text-red-500 lowercase font-bold">— Required for consent</span>}</label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="Search staff..."
-                            className={`w-full px-6 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 ${errors.assignedTo ? 'border-red-500/50' : 'border-transparent'} outline-none focus:ring-2 focus:ring-blue-600 transition-all dark:text-white font-bold shadow-inner text-sm`}
-                            value={userSearch}
-                            onFocus={() => setShowUserDropdown(true)}
-                            onChange={e => { setUserSearch(e.target.value); setShowUserDropdown(true); }}
-                          />
-                          {showUserDropdown && (
-                            <div className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-[100] overflow-hidden max-h-48 overflow-y-auto scrollbar-hide animate-fade-in">
-                              {filteredUsers.map(u => {
-                                // Determine display name and ID depending on if it's API data or Mock data
-                                const displayName = u.firstName ? `${u.firstName} ${u.surname}` : u.name;
-                                const assigneeId = u.userId || u.id;
-                                const deptName = u.department?.name || u.department || 'Unknown';
-
-                                return (
-                                  <div
-                                    key={u.id}
-                                    onClick={() => {
-                                      // Auto-fill manager and department logic
-                                      let managerName = '';
-                                      let finalDeptName = deptName;
-
-                                      // The user's department property usually contains an ID.
-                                      const uDeptId = u.department?.id || u.department;
-                                      const uDeptName = u.department?.name || u.department;
-
-                                      const fullDept = allDepartments.find(d => d.id === uDeptId || d.name === uDeptName);
-                                      if (fullDept) {
-                                        finalDeptName = fullDept.name;
-                                        if (fullDept.head?.name && fullDept.head?.name !== 'Unassigned') {
-                                          managerName = fullDept.head.name;
-                                        } else if (fullDept.headName && fullDept.headName !== 'Unassigned') {
-                                          managerName = fullDept.headName;
-                                        }
-                                      }
-
-                                      // Fallback to employee's hiringManagerId if department head is not found
-                                      if (!managerName && u.hiringManagerId) {
-                                        const mgr = allEmployees.find(emp => emp.userId === u.hiringManagerId || emp.id === u.hiringManagerId);
-                                        if (mgr) {
-                                          managerName = mgr.firstName ? `${mgr.firstName} ${mgr.surname}` : mgr.name;
-                                        } else {
-                                          managerName = u.hiringManagerId;
-                                        }
-                                      }
-
-                                      setFormData({
-                                        ...formData,
-                                        assignedTo: assigneeId,
-                                        department: finalDeptName,
-                                        manager: managerName || formData.manager // update if found
-                                      });
-                                      setUserSearch(displayName);
-                                      setShowUserDropdown(false);
-                                      if (errors.assignedTo) setErrors({ ...errors, assignedTo: false });
-                                    }}
-                                    className="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-900 cursor-pointer flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 last:border-0"
-                                  >
-                                    <img src={u.avatar || `https://ui-avatars.com/api/?name=${displayName}`} className="w-8 h-8 rounded-full object-cover" alt="" />
-                                    <div>
-                                      <p className="font-bold text-xs dark:text-white">{displayName}</p>
-                                      <p className="text-[9px] text-slate-400 font-bold uppercase">{deptName}</p>
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Staff Manager {errors.manager && <span className="text-red-500 lowercase font-bold">— Required</span>}</label>
-                        <input
-                          type="text"
-                          readOnly
-                          className={`w-full px-6 py-3 rounded-2xl bg-slate-100 dark:bg-slate-800 border-2 ${errors.manager ? 'border-red-500/50' : 'border-transparent'} outline-none text-slate-500 dark:text-slate-400 font-bold shadow-inner text-sm cursor-not-allowed`}
-                          value={formData.manager || ''}
-                          placeholder="Auto-filled upon assignment"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Department {errors.department && <span className="text-red-500 lowercase font-bold">— Required</span>}</label>
-                        <input
-                          type="text"
-                          readOnly
-                          className={`w-full px-6 py-3 rounded-2xl bg-slate-100 dark:bg-slate-800 border-2 ${errors.department ? 'border-red-500/50' : 'border-transparent'} outline-none text-slate-500 dark:text-slate-400 font-bold shadow-inner text-sm cursor-not-allowed`}
-                          value={formData.department || ''}
-                          placeholder="Auto-filled upon assignment"
-                        />
-                      </div>
-
-                      <div className="space-y-2 lg:col-span-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Physical Location</label>
-                        <select
-                          className="w-full px-6 py-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 border-transparent outline-none focus:ring-2 focus:ring-blue-600 transition-all dark:text-white font-bold shadow-inner text-sm"
-                          value={formData.location}
-                          onChange={e => setFormData({ ...formData, location: e.target.value })}
-                        >
-                          <option value="">Select Location</option>
-                          {assetLocations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-sm font-black">photo_camera</span>
-                      </div>
-                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">3. Media Upload</h3>
-                    </div>
-
-                    <div className="p-16 border-4 border-dashed border-slate-100 dark:border-slate-800 rounded-[3rem] flex flex-col items-center justify-center gap-4 group cursor-pointer hover:border-blue-600 transition-all bg-slate-50/50 dark:bg-slate-800/20 relative">
-                      <input
-                        type="file"
-                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            setReceiptFile(e.target.files[0]);
-                          }
-                        }}
-                      />
-                      <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white dark:bg-slate-900 shadow-xl flex items-center justify-center text-slate-400 group-hover:text-blue-600 transition-all scale-100 group-hover:scale-110">
-                        <span className="material-symbols-outlined text-4xl">
-                          {receiptFile ? 'check_circle' : 'cloud_upload'}
-                        </span>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-base md:text-lg font-black dark:text-white">
-                          {receiptFile ? receiptFile.name : 'Upload Asset Condition Photo'}
-                        </p>
-                        <p className="text-xs md:text-sm font-bold text-slate-400">
-                          {receiptFile ? 'File attached successfully' : 'or drag and drop file here'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6 md:p-8 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 backdrop-blur-md flex flex-wrap gap-3 shrink-0 justify-center">
-                  <button
-                    onClick={() => setIsAdding(false)}
-                    disabled={isCreatingAsset}
-                    className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border-2 border-slate-200 dark:border-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shadow-sm ${isCreatingAsset ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    Cancel
-                  </button>
-
-                  {formData.assignedTo ? (
-                    <button
-                      onClick={() => handleSave('consent')}
-                      disabled={isCreatingAsset}
-                      className={`flex-[2] min-w-[220px] py-4 rounded-2xl bg-blue-600 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 ${isCreatingAsset ? 'opacity-70 cursor-not-allowed hidden' : ''}`}
-                    >
-                      {isCreatingAsset ? (
-                        <span className="material-symbols-outlined text-base animate-spin">refresh</span>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined text-base">signature</span>
-                          Save & Send for Consent
-                        </>
-                      )}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleSave()}
-                      disabled={isCreatingAsset}
-                      className={`flex-[2] min-w-[220px] py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-[10px] uppercase tracking-widest shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 ${isCreatingAsset ? 'opacity-70 cursor-not-allowed hidden' : ''}`}
-                    >
-                      {isCreatingAsset ? (
-                        <span className="material-symbols-outlined text-base animate-spin">refresh</span>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined text-base">save</span>
-                          Save Asset
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  {/* Keep the loading button always visible when loading to prevent layout shift */}
-                  {isCreatingAsset && (
-                    <button
-                      disabled
-                      className="flex-[2] min-w-[220px] py-4 rounded-2xl bg-blue-600 text-white font-black text-[10px] uppercase tracking-widest shadow-lg opacity-70 cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      <span className="material-symbols-outlined text-base animate-spin">refresh</span>
-                      Processing...
-                    </button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="p-12 md:p-20 text-center space-y-8 flex flex-col items-center animate-fade-in overflow-y-auto">
-                <div className="w-24 h-24 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-full flex items-center justify-center shadow-2xl shadow-green-500/20">
-                  <span className="material-symbols-outlined text-5xl">check_circle</span>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl" onClick={() => setIsImporting(false)}></div>
+          <div className="relative bg-white dark:bg-slate-950 w-full max-w-2xl rounded-[3rem] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-fade-in flex flex-col">
+            <div className="p-10 flex items-start justify-between">
+              <div className="flex items-center gap-5">
+                <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center rounded-2xl">
+                  <span className="material-symbols-outlined text-4xl font-black">cloud_upload</span>
                 </div>
                 <div>
-                  <h2 className="text-3xl font-black tracking-tighter dark:text-white mb-2">Registration Complete</h2>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 font-bold max-w-sm mx-auto">
-                    Asset <strong>{lastAddedAsset?.id}</strong> recorded.
-                    {lastAddedAsset?.assignedTo && ` Consent workflow has been dispatched to ${lastAddedAsset.manager || 'their manager'}.`}
-                  </p>
-                </div>
-
-                <div className="p-8 bg-white rounded-[2.5rem] shadow-2xl border-4 border-slate-50 flex flex-col items-center gap-6">
-                  <div className="w-48 h-48 bg-slate-100 rounded-2xl flex items-center justify-center relative group overflow-hidden">
-                    <span className="material-symbols-outlined text-7xl text-slate-300">qr_code_2</span>
-                    <div className="absolute inset-0 bg-blue-600/10 backdrop-blur-[1px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button className="bg-white px-4 py-2 rounded-full font-black text-[10px] text-blue-600 shadow-xl uppercase tracking-widest">Download QR</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-4 w-full max-w-md">
-                  <button
-                    onClick={() => { setShowSuccess(false); setIsAdding(false); }}
-                    className="flex-1 py-4 rounded-full font-black text-xs uppercase tracking-widest bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:scale-[1.02] transition-all shadow-xl"
-                  >
-                    Done
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowSuccess(false);
-                      setFormData({
-                        name: '', condition: 'Brand New', category: '', serialNumber: '', description: '',
-                        purchaseDate: new Date().toISOString().split('T')[0], purchasePrice: '',
-                        warrantyExpiry: '', assignedTo: '', manager: '', department: '', location: ''
-                      });
-                      setUserSearch('');
-                    }}
-                    className="flex-1 py-4 rounded-full font-black text-xs uppercase tracking-widest border-2 border-slate-200 dark:border-slate-800 dark:text-white hover:bg-slate-50 transition-all"
-                  >
-                    Add More
-                  </button>
+                  <h2 className="text-3xl font-black tracking-tight dark:text-white">Batch Import</h2>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Asset Inventory Synchronization</p>
                 </div>
               </div>
-            )}
+              <button onClick={() => setIsImporting(false)} className="w-12 h-12 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-300">
+                <span className="material-symbols-outlined text-3xl">close</span>
+              </button>
+            </div>
+            
+            <div className="px-10 pb-10 space-y-8">
+               <div className="grid grid-cols-2 gap-4">
+                 <button className="flex flex-col items-center justify-center gap-3 p-8 rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-2 border-transparent hover:border-blue-600 transition-all group">
+                    <span className="material-symbols-outlined text-3xl text-slate-300 group-hover:text-blue-600 transition-colors">description</span>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-blue-600">CSV Template</p>
+                 </button>
+                 <button className="flex flex-col items-center justify-center gap-3 p-8 rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-2 border-transparent hover:border-blue-600 transition-all group">
+                    <span className="material-symbols-outlined text-3xl text-slate-300 group-hover:text-blue-600 transition-colors">table_view</span>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-blue-600">Fetch from HRIS</p>
+                 </button>
+               </div>
+               
+               <div 
+                 className="relative group cursor-pointer"
+                 onClick={() => fileInputRef.current?.click()}
+               >
+                 <input
+                   type="file"
+                   ref={fileInputRef}
+                   className="hidden"
+                   accept=".csv"
+                   onChange={(e) => {
+                     const file = e.target.files?.[0];
+                     if (file) {
+                       processImport(file);
+                     }
+                   }}
+                 />
+                 <div className="absolute inset-0 bg-blue-600 rounded-[3rem] opacity-0 group-hover:opacity-10 scale-95 group-hover:scale-100 transition-all"></div>
+                 <div className="border-4 border-dashed border-slate-100 dark:border-slate-800 rounded-[3rem] p-20 text-center space-y-4 transition-all group-hover:border-blue-600">
+                    {isImportingBusy ? (
+                      <div className="space-y-6 animate-fade-in">
+                         <div className="w-20 h-20 bg-blue-600 text-white rounded-3xl mx-auto flex items-center justify-center shadow-xl shadow-blue-500/30 animate-pulse">
+                            <span className="material-symbols-outlined text-4xl">sync</span>
+                         </div>
+                         <div className="space-y-2">
+                           <p className="text-lg font-black dark:text-white uppercase tracking-tighter italic">Batch Processing...</p>
+                           <div className="w-48 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mx-auto overflow-hidden">
+                              <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${importProgress}%` }}></div>
+                           </div>
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{importProgress}% Initialized</p>
+                         </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="w-20 h-20 bg-slate-50 dark:bg-slate-900 rounded-3xl mx-auto flex items-center justify-center text-slate-200 dark:text-slate-800 group-hover:text-blue-600 group-hover:scale-110 transition-all">
+                           <span className="material-symbols-outlined text-5xl">upload_file</span>
+                        </div>
+                        <div>
+                          <p className="text-lg font-black dark:text-white">Drop data source here</p>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">or browse local files</p>
+                        </div>
+                      </>
+                    )}
+                 </div>
+               </div>
+            </div>
           </div>
         </div>
-      ), document.body)}
+      )}
 
+      <AddAssetWorkflow isAdding={isAdding} setIsAdding={setIsAdding} />
+      
+      <BulkOperations 
+        selectedAssetIds={selectedAssetIds}
+        setSelectedAssetIds={setSelectedAssetIds}
+        isBulkDecommissioning={isBulkDecommissioning}
+        setIsBulkDecommissioning={setIsBulkDecommissioning}
+        isBulkTagging={isBulkTagging}
+        setIsBulkTagging={setIsBulkTagging}
+        isBulkAccepting={isBulkAccepting}
+        setIsBulkAccepting={setIsBulkAccepting}
+        isBulkAssigningModalOpen={isBulkAssigningModalOpen}
+        setIsBulkAssigningModalOpen={setIsBulkAssigningModalOpen}
+      />
+
+      {superAdminModals}
     </div>
   );
 };

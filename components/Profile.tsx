@@ -1,12 +1,12 @@
 
 import React from 'react';
-import { User } from '../types';
+import { useAssetTracker } from '../AssetTrackerContext';
 
-interface ProfileProps {
-  user: User;
-}
+export const Profile: React.FC = () => {
+  const { user } = useAssetTracker();
 
-export const Profile: React.FC<ProfileProps> = ({ user }) => {
+  if (!user) return null;
+
   const cards = [
     { label: 'Employee ID', value: user.employeeId, icon: 'badge' },
     { label: 'Department', value: user.department, icon: 'corporate_fare' },

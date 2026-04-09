@@ -1,17 +1,16 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, UserRole, Asset, AuditCycle, AssetStatus, VerificationStatus } from '../types';
+import { UserRole, AuditCycle, VerificationStatus } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { useAssetTracker } from '../AssetTrackerContext';
+import { AuditLog } from './AuditLog';
 
-interface AuditsProps {
-  user: User;
-  assets: Asset[];
-}
-
-export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
+export const Audits: React.FC = () => {
+  const { user, assets } = useAssetTracker();
   const [auditCycles, setAuditCycles] = useState<AuditCycle[]>([]);
-
   const [activeCycle, setActiveCycle] = useState<AuditCycle | null>(null);
+  const [activeTab, setActiveTab] = useState<'cycles' | 'stream'>('cycles');
+  
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedAuditToExport, setSelectedAuditToExport] = useState<AuditCycle | null>(null);
@@ -21,7 +20,6 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [auditView, setAuditView] = useState<'mine'|'all'>('mine');
 
-  // New Audit Form State
   const [newAudit, setNewAudit] = useState({
     name: '',
     startDate: new Date().toISOString().split('T')[0],
@@ -31,14 +29,10 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isCreatingAudit, setIsCreatingAudit] = useState(false);
 
-  // Noltfinance123!
-  // lmsdatabase123@
-
-  // Permissions Logic
-  const isSuperAdmin = user.role === UserRole.SUPER_ADMIN;
-  const isAuditor = user.role === UserRole.AUDITOR;
-  const isAdminUser = user.role === UserRole.ADMIN_USER;
-  const isStandardUser = user.role === UserRole.USER;
+  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
+  const isAuditor = user?.role === UserRole.AUDITOR;
+  const isAdminUser = user?.role === UserRole.ADMIN_USER;
+  const isStandardUser = user?.role === UserRole.USER;
 
   useEffect(() => {
     const fetchAudits = async () => {
@@ -81,8 +75,8 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
 
   const verificationAssets = useMemo(() => {
     let base = assets;
-    if (auditView === 'mine') {
-      base = assets.filter(a => a.assignedTo === user.id);
+    if (auditView === 'mine' && user) {
+      base = assets.filter(a => a.assignedTo === user.id || a.assignedTo === user.userId);
     }
     if (searchTerm) {
       base = base.filter(a => 
@@ -91,7 +85,7 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
       );
     }
     return base;
-  }, [assets, auditView, user.id, searchTerm]);
+  }, [assets, auditView, user, searchTerm]);
 
   const selectedAsset = useMemo(() => {
     const id = selectedAssetId || (verificationAssets.length > 0 ? verificationAssets[0].id : null);
@@ -126,7 +120,6 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
         return [...filtered, newResult];
       });
 
-      // Update cycle completion visually (simplified)
       const cycleIdx = auditCycles.findIndex(c => c.id === activeCycle.id);
       if (cycleIdx > -1) {
         const updatedCycles = [...auditCycles];
@@ -135,7 +128,6 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
         setAuditCycles(updatedCycles);
       }
 
-      // Automatically highlight next asset
       const currentIndex = verificationAssets.findIndex(a => a.id === selectedAsset.id);
       if (currentIndex < verificationAssets.length - 1) {
         setSelectedAssetId(verificationAssets[currentIndex + 1].id);
@@ -185,7 +177,7 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
     const missing = cycleResults.filter(r => r.result === 'Missing').length;
     const damaged = cycleResults.filter(r => r.result === 'Damaged').length;
     const unclear = cycleResults.filter(r => r.result === 'Unclear').length;
-    const pending = Math.max(0, verificationAssets.length - cycleResults.length);
+    const pending = Math.max(0, (targetCycle ? assets.length : 0) - cycleResults.length);
 
     return [
       { name: 'Verified', value: verified || 0, color: '#22c55e' },
@@ -194,7 +186,7 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
       { name: 'Unclear', value: unclear || 0, color: '#64748b' },
       { name: 'Pending', value: pending || 0, color: '#3b82f6' },
     ];
-  }, [verificationResults, activeCycle, verificationAssets, auditCycles]);
+  }, [verificationResults, activeCycle, assets.length, auditCycles]);
 
   const handleExport = (cycle: AuditCycle) => {
     setSelectedAuditToExport(cycle);
@@ -203,7 +195,7 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
 
   const performExport = () => {
     const headers = ['Asset ID', 'Name', 'Category', 'Condition', 'Status', 'Audit Result', 'Timestamp', 'Notes'];
-    const rows = verificationAssets.map(a => {
+    const rows = assets.map(a => {
       const result = verificationResults.find(r => r.assetId === a.id && r.cycleId === selectedAuditToExport?.id);
       return [a.id, a.name, a.category, a.condition, a.status, result?.result || 'Pending', result?.timestamp || '-', result?.notes || '-'];
     });
@@ -395,98 +387,126 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
             <h2 className="text-4xl font-black tracking-tighter dark:text-white">Audit Hub</h2>
             <p className="text-slate-400 font-bold">Manage system-wide asset verification cycles.</p>
           </div>
-          {canStartAudit && !hasActiveAudit && (
-            <button 
-              onClick={() => setIsCreateModalOpen(true)}
-              className="bg-blue-600 text-white px-8 py-4 rounded-full font-black tracking-tight shadow-xl shadow-blue-500/20 transition-all hover:scale-105 active:scale-95"
-            >
-              Start New Audit
-            </button>
-          )}
+          <div className="flex gap-4">
+             {canStartAudit && !hasActiveAudit && (
+               <button 
+                 onClick={() => setIsCreateModalOpen(true)}
+                 className="bg-blue-600 text-white px-8 py-4 rounded-full font-black tracking-tight shadow-xl shadow-blue-500/20 transition-all hover:scale-105 active:scale-95"
+               >
+                 Start New Audit
+               </button>
+             )}
+          </div>
        </div>
 
-       {canSeeAnalytics && (
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
-              <h3 className="text-xl font-black tracking-tight dark:text-white mb-8">System Oversight</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={auditPerformanceData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e120" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 900}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 900}} />
-                    <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                    <Bar dataKey="value" radius={[10, 10, 0, 0]} barSize={40}>
-                      {auditPerformanceData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+       {/* Tab Switcher */}
+       <div className="flex gap-4 border-b border-slate-100 dark:border-slate-800 pb-px">
+         <button 
+           onClick={() => setActiveTab('cycles')}
+           className={`px-8 py-4 font-black uppercase text-xs tracking-widest transition-all relative ${activeTab === 'cycles' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+         >
+           Audit Cycles
+           {activeTab === 'cycles' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-600 rounded-t-full"></div>}
+         </button>
+         <button 
+           onClick={() => setActiveTab('stream')}
+           className={`px-8 py-4 font-black uppercase text-xs tracking-widest transition-all relative ${activeTab === 'stream' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+         >
+           Activity Stream
+           {activeTab === 'stream' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-600 rounded-t-full"></div>}
+         </button>
+       </div>
 
-            <div className="bg-slate-900 dark:bg-slate-800 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden text-white flex flex-col justify-center items-center">
-              <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest absolute top-8">Audit Success</h3>
-              <div className="w-40 h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={auditPerformanceData} innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value" stroke="none">
-                      {auditPerformanceData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <p className="text-4xl font-black tracking-tighter mt-4">
-                {auditPerformanceData[0].value > 0 ? Math.round((auditPerformanceData[0].value / (auditPerformanceData[0].value + auditPerformanceData[1].value + auditPerformanceData[2].value + auditPerformanceData[3].value + auditPerformanceData[4].value)) * 100) : 0}%
-              </p>
-              <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Assets Verified</p>
-              <span className="material-symbols-outlined text-[12rem] absolute -right-12 -top-12 text-white/5 pointer-events-none">insights</span>
-            </div>
+       {activeTab === 'cycles' ? (
+         <>
+           {canSeeAnalytics && (
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
+                  <h3 className="text-xl font-black tracking-tight dark:text-white mb-8">System Oversight</h3>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={auditPerformanceData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e120" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 900}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 900}} />
+                        <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                        <Bar dataKey="value" radius={[10, 10, 0, 0]} barSize={40}>
+                          {auditPerformanceData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 dark:bg-slate-800 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden text-white flex flex-col justify-center items-center">
+                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest absolute top-8">Audit Success</h3>
+                  <div className="w-40 h-40">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={auditPerformanceData} innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value" stroke="none">
+                          {auditPerformanceData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className="text-4xl font-black tracking-tighter mt-4">
+                    {auditPerformanceData[0].value + auditPerformanceData[1].value + auditPerformanceData[2].value + auditPerformanceData[3].value + auditPerformanceData[4].value > 0 ? Math.round((auditPerformanceData[0].value / (auditPerformanceData[0].value + auditPerformanceData[1].value + auditPerformanceData[2].value + auditPerformanceData[3].value + auditPerformanceData[4].value)) * 100) : 0}%
+                  </p>
+                  <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Assets Verified</p>
+                  <span className="material-symbols-outlined text-[12rem] absolute -right-12 -top-12 text-white/5 pointer-events-none">insights</span>
+                </div>
+             </div>
+           )}
+
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {filteredCycles.length > 0 ? (
+                filteredCycles.map(cycle => (
+                  <div key={cycle.id} className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 hover:shadow-xl transition-all relative overflow-hidden shadow-sm group">
+                    <div className="flex justify-between items-start mb-12">
+                      <div>
+                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${cycle.status === 'Completed' ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'}`}>
+                          {cycle.status}
+                        </span>
+                        <h3 className="text-2xl font-black tracking-tight mt-4 dark:text-white leading-tight">{cycle.name}</h3>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">{cycle.displayId || cycle.id}</p>
+                      </div>
+                      {canExportAudit && (
+                        <button onClick={() => handleExport(cycle)} className="w-12 h-12 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-blue-600 hover:text-white transition-all shadow-sm">
+                          <span className="material-symbols-outlined">download</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-8">
+                      <div className="h-full bg-blue-600 transition-all duration-1000" style={{ width: `${cycle.completion}%` }}></div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{cycle.startDate} — {cycle.endDate}</span>
+                      <button onClick={() => setActiveCycle(cycle)} className="bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-3 rounded-full font-black text-xs uppercase tracking-widest hover:bg-blue-600 dark:hover:bg-blue-500 transition-all shadow-md group-hover:scale-105">
+                        {cycle.status === 'Completed' ? 'View Final Report' : 'Resume Audit'}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                 <div className="col-span-full py-20 bg-white dark:bg-slate-900 rounded-[3rem] border border-dashed border-slate-200 dark:border-slate-800 text-center">
+                    <span className="material-symbols-outlined text-5xl text-slate-200 dark:text-slate-800 mb-4">event_busy</span>
+                    <p className="text-slate-400 font-bold max-w-sm mx-auto">No active audit cycles. A Super Admin or Auditor must start one before verification can begin.</p>
+                    {canStartAudit && !hasActiveAudit && (
+                      <button onClick={() => setIsCreateModalOpen(true)} className="mt-6 text-blue-600 font-black uppercase text-xs tracking-[0.2em] hover:underline transition-all underline-offset-8">Create First Cycle Now</button>
+                    )}
+                 </div>
+              )}
+           </div>
+         </>
+       ) : (
+         <div className="h-[calc(100vh-25rem)]">
+            <AuditLog title="System-wide Audit Trail" showViewHistory={false} />
          </div>
        )}
-
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {filteredCycles.length > 0 ? (
-            filteredCycles.map(cycle => (
-              <div key={cycle.id} className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 hover:shadow-xl transition-all relative overflow-hidden shadow-sm group">
-                <div className="flex justify-between items-start mb-12">
-                  <div>
-                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${cycle.status === 'Completed' ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'}`}>
-                      {cycle.status}
-                    </span>
-                    <h3 className="text-2xl font-black tracking-tight mt-4 dark:text-white leading-tight">{cycle.name}</h3>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">{cycle.displayId || cycle.id}</p>
-                  </div>
-                  {canExportAudit && (
-                    <button onClick={() => handleExport(cycle)} className="w-12 h-12 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-                      <span className="material-symbols-outlined">download</span>
-                    </button>
-                  )}
-                </div>
-                <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-8">
-                  <div className="h-full bg-blue-600 transition-all duration-1000" style={{ width: `${cycle.completion}%` }}></div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{cycle.startDate} — {cycle.endDate}</span>
-                  <button onClick={() => setActiveCycle(cycle)} className="bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-3 rounded-full font-black text-xs uppercase tracking-widest hover:bg-blue-600 dark:hover:bg-blue-500 transition-all shadow-md group-hover:scale-105">
-                    {cycle.status === 'Completed' ? 'View Final Report' : 'Resume Audit'}
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-             <div className="col-span-full py-20 bg-white dark:bg-slate-900 rounded-[3rem] border border-dashed border-slate-200 dark:border-slate-800 text-center">
-                <span className="material-symbols-outlined text-5xl text-slate-200 dark:text-slate-800 mb-4">event_busy</span>
-                <p className="text-slate-400 font-bold max-w-sm mx-auto">No active audit cycles. A Super Admin or Auditor must start one before verification can begin.</p>
-                {canStartAudit && !hasActiveAudit && (
-                  <button onClick={() => setIsCreateModalOpen(true)} className="mt-6 text-blue-600 font-black uppercase text-xs tracking-[0.2em] hover:underline transition-all underline-offset-8">Create First Cycle Now</button>
-                )}
-             </div>
-          )}
-       </div>
 
        {/* Start New Audit Modal */}
        {isCreateModalOpen && (
@@ -547,7 +567,6 @@ export const Audits: React.FC<AuditsProps> = ({ user, assets }) => {
          </div>
        )}
 
-       {/* Export Configuration Modal */}
        {isExportModalOpen && (
          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsExportModalOpen(false)}></div>

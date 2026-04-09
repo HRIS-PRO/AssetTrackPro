@@ -1,29 +1,26 @@
 
 import React, { useState, useMemo } from 'react';
-import { User, UserRole, EquipmentRequest, AssetReport, ReportStatus, RequestStatus, RequestPriority } from '../types';
+import { UserRole, EquipmentRequest, AssetReport, ReportStatus, RequestStatus, RequestPriority } from '../types';
 import { RequestDetailsModal } from './RequestDetailsModal';
+import { useAssetTracker } from '../AssetTrackerContext';
 
 interface RequestsProps {
-  user: User;
   onRequestAsset: () => void;
-  requests: EquipmentRequest[];
-  managedRequests: EquipmentRequest[];
-  faultyReports: AssetReport[];
-  managedReports: AssetReport[];
 }
 
 type ActiveTab = 'Provisioning' | 'AssetReports';
 type SubToggle = 'All' | 'Mine';
 
-export const Requests: React.FC<RequestsProps> = ({
-  user,
-  onRequestAsset,
-  requests,
-  managedRequests,
-  faultyReports,
-  managedReports
-}) => {
-  const isAdmin = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN_USER;
+export const Requests: React.FC<RequestsProps> = ({ onRequestAsset }) => {
+  const { 
+    user, 
+    requests, 
+    managedRequests, 
+    faultyReports, 
+    managedReports 
+  } = useAssetTracker();
+
+  const isAdmin = user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN_USER;
   const [activeTab, setActiveTab] = useState<ActiveTab>('Provisioning');
   const [subToggle, setSubToggle] = useState<SubToggle>(isAdmin ? 'All' : 'Mine');
 
@@ -66,7 +63,6 @@ export const Requests: React.FC<RequestsProps> = ({
         },
         body: JSON.stringify({ status })
       });
-      // State is updated via App.tsx socket
     } catch (err) {
       console.error('Failed to update request status', err);
     } finally {
@@ -87,7 +83,6 @@ export const Requests: React.FC<RequestsProps> = ({
         },
         body: JSON.stringify({ status })
       });
-      // State is updated via App.tsx socket
     } catch (err) {
       console.error('Failed to update status', err);
     } finally {
@@ -106,10 +101,10 @@ export const Requests: React.FC<RequestsProps> = ({
     { key: 'AssetReports', label: 'Asset Reports', icon: 'report_problem' },
   ];
 
+  if (!user) return null;
+
   return (
     <div className="space-y-8 animate-fade-in pb-12">
-
-      {/* Page Header */}
       <div className="flex flex-col md:flex-row gap-6 justify-between items-end">
         <div className="space-y-1">
           <h2 className="text-4xl font-black tracking-tighter dark:text-white">Requests</h2>
@@ -124,7 +119,6 @@ export const Requests: React.FC<RequestsProps> = ({
         </button>
       </div>
 
-      {/* Tab Bar Container */}
       <div className="flex flex-col md:flex-row gap-6 md:items-center justify-between">
         <div className="flex gap-2 p-1.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-full w-fit shadow-sm flex-wrap">
           {tabs.map(tab => (
@@ -149,7 +143,6 @@ export const Requests: React.FC<RequestsProps> = ({
           ))}
         </div>
 
-        {/* Sub-toggle (Managed vs Mine) */}
         <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl w-fit">
           <button
             onClick={() => setSubToggle('All')}
@@ -166,7 +159,6 @@ export const Requests: React.FC<RequestsProps> = ({
         </div>
       </div>
 
-      {/* ===================== EQUIPMENT REQUESTS ===================== */}
       {activeTab === 'Provisioning' && (
         <div className="grid grid-cols-1 gap-6">
           {filteredRequests.length > 0 ? filteredRequests.map(req => (
@@ -241,11 +233,8 @@ export const Requests: React.FC<RequestsProps> = ({
         </div>
       )}
 
-      {/* ===================== FAULTY ASSET REPORTS ===================== */}
       {activeTab === 'AssetReports' && (
         <div className="space-y-6">
-
-          {/* Sub-header */}
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex-1 min-w-0">
               <h3 className="text-2xl font-black tracking-tight dark:text-white">
@@ -257,8 +246,6 @@ export const Requests: React.FC<RequestsProps> = ({
                   : 'Track the status of issues you have reported'}
               </p>
             </div>
-
-            {/* Status filter pills */}
             <div className="flex flex-wrap gap-2">
               {(['ALL', ReportStatus.PENDING, ReportStatus.IN_REVIEW, ReportStatus.RESOLVED] as const).map(s => (
                 <button
@@ -278,7 +265,6 @@ export const Requests: React.FC<RequestsProps> = ({
             </div>
           </div>
 
-          {/* Empty */}
           {filteredFaultyReports.length === 0 && (
             <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border-[3px] border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center py-24 gap-4">
               <div className="w-20 h-20 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
@@ -295,7 +281,6 @@ export const Requests: React.FC<RequestsProps> = ({
             </div>
           )}
 
-          {/* Report cards */}
           {filteredFaultyReports.length > 0 && (
             <div className="grid gap-4">
               {filteredFaultyReports.map(report => (
@@ -304,7 +289,6 @@ export const Requests: React.FC<RequestsProps> = ({
                   className="bg-white dark:bg-slate-900 rounded-[2rem] border-[3px] border-slate-100 dark:border-slate-800 p-6 hover:border-slate-200 dark:hover:border-slate-700 transition-all"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                    {/* Status bar */}
                     <div className={`w-1.5 self-stretch rounded-full flex-shrink-0 ${report.status === ReportStatus.RESOLVED ? 'bg-green-500' :
                       report.status === ReportStatus.IN_REVIEW ? 'bg-blue-500' : 'bg-amber-500'
                       }`} />
@@ -338,12 +322,10 @@ export const Requests: React.FC<RequestsProps> = ({
                         </span>
                       </div>
 
-                      {/* Comment */}
                       <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
                         <p className="text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed line-clamp-2">{report.comment}</p>
                       </div>
 
-                      {/* Actions */}
                       <div className="flex flex-wrap gap-2 pt-1">
                         <button
                           onClick={() => { setSelectedReport(report); setIsDetailModalOpen(true); }}
@@ -353,7 +335,6 @@ export const Requests: React.FC<RequestsProps> = ({
                           View Details
                         </button>
 
-                        {/* Admin-only action buttons */}
                         {isAdmin && report.status === ReportStatus.PENDING && (
                           <button
                             onClick={() => handleUpdateReportStatus(report.id, ReportStatus.IN_REVIEW)}
@@ -380,7 +361,6 @@ export const Requests: React.FC<RequestsProps> = ({
                           </button>
                         )}
 
-                        {/* For users: show read-only resolved badge */}
                         {!isAdmin && report.status === ReportStatus.RESOLVED && (
                           <div className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 font-black text-[10px] uppercase tracking-widest">
                             <span className="material-symbols-outlined text-sm">task_alt</span>
@@ -397,11 +377,9 @@ export const Requests: React.FC<RequestsProps> = ({
         </div>
       )}
 
-      {/* ===================== REPORT DETAIL MODAL ===================== */}
       {isDetailModalOpen && selectedReport && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden border-[3px] border-slate-100 dark:border-slate-800">
-            {/* Header */}
             <div className="p-8 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center">
@@ -425,7 +403,6 @@ export const Requests: React.FC<RequestsProps> = ({
               </button>
             </div>
 
-            {/* Body */}
             <div className="p-8 space-y-6 max-h-[50vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-1">
@@ -457,7 +434,6 @@ export const Requests: React.FC<RequestsProps> = ({
               </div>
             </div>
 
-            {/* Footer — Admin actions only */}
             {isAdmin && (
               <div className="p-6 bg-slate-50 dark:bg-slate-800/50 flex flex-wrap gap-3">
                 <button
@@ -471,7 +447,7 @@ export const Requests: React.FC<RequestsProps> = ({
                 <button
                   onClick={() => { handleUpdateReportStatus(selectedReport.id, ReportStatus.RESOLVED); setIsDetailModalOpen(false); }}
                   disabled={selectedReport.status === ReportStatus.RESOLVED || isUpdatingStatus === selectedReport.id}
-                  className="flex-1 py-4 px-6 rounded-2xl bg-green-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-green-700 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 py-4 px-6 rounded-2xl bg-green-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-green-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-sm">check_circle</span>
                   Mark as Resolved
@@ -482,7 +458,6 @@ export const Requests: React.FC<RequestsProps> = ({
         </div>
       )}
 
-      {/* Equipment Request Details Modal */}
       <RequestDetailsModal
         request={selectedRequest}
         onClose={() => setSelectedRequestId(null)}

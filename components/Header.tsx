@@ -1,29 +1,23 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { User, Activity, UserRole } from '../types';
+import { UserRole } from '../types';
+import { useAssetTracker } from '../AssetTrackerContext';
 
 interface HeaderProps {
-  user: User;
-  isDarkMode: boolean;
-  activities: Activity[];
-  setActivities: React.Dispatch<React.SetStateAction<Activity[]>>;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
   searchQuery: string;
-  setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
+  setSearchQuery: (val: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  user,
-  isDarkMode,
-  activities,
-  setActivities,
   isSidebarOpen,
   setIsSidebarOpen,
   searchQuery,
   setSearchQuery
 }) => {
+  const { user, activities, setActivities } = useAssetTracker();
   const location = useLocation();
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -32,22 +26,23 @@ export const Header: React.FC<HeaderProps> = ({
   const path = location.pathname.split('/').filter(p => p);
   const pageName = path.length > 0 ? path[0].charAt(0).toUpperCase() + path[0].slice(1) : 'Dashboard';
 
-  const isSuperAdmin = user.role === UserRole.SUPER_ADMIN;
+  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
 
-  // Filter activities based on role logic
   const filteredUnreadActivities = useMemo(() => {
+    if (!user) return [];
     return activities.filter(act => {
       if (act.isRead) return false;
       if (isSuperAdmin) return true;
       const hasPermission = act.roles.includes(user.role);
-      const isForMe = act.targetUserId ? act.targetUserId === user.id : true;
+      const isForMe = act.targetUserId ? act.targetUserId === user.id || act.targetUserId === user.userId : true;
       return hasPermission && isForMe;
     });
-  }, [activities, user.id, user.role, isSuperAdmin]);
+  }, [activities, user, isSuperAdmin]);
 
   const markAllAsRead = () => {
+    if (!user) return;
     setActivities(prev => prev.map(act => {
-      const isRelevant = isSuperAdmin || (act.roles.includes(user.role) && (act.targetUserId ? act.targetUserId === user.id : true));
+      const isRelevant = isSuperAdmin || (act.roles.includes(user.role) && (act.targetUserId ? act.targetUserId === user.id || act.targetUserId === user.userId : true));
       return isRelevant ? { ...act, isRead: true } : act;
     }));
   };
@@ -68,10 +63,11 @@ export const Header: React.FC<HeaderProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  if (!user) return null;
+
   return (
     <header className="sticky top-0 z-40 flex items-center justify-between px-4 md:px-8 py-4 md:py-6 bg-white/90 dark:bg-slate-950/90 backdrop-blur-2xl border-b border-slate-200/50 dark:border-slate-800/50 transition-colors">
       <div className="flex items-center gap-4">
-        {/* Mobile Menu Trigger */}
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-500"
@@ -99,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({
             type="text"
             placeholder="Search assets..."
             value={searchQuery || ''}
-            onChange={(e) => setSearchQuery?.(e.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-12 pr-16 py-2.5 rounded-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-700/50 focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 w-72 transition-all dark:text-white dark:placeholder-slate-500 outline-none text-sm"
           />
           <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors text-[20px]">search</span>

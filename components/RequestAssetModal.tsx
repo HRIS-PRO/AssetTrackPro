@@ -1,15 +1,15 @@
 
 import React, { useState } from 'react';
-import { CATEGORIES } from '../constants';
+import { useAssetTracker } from '../AssetTrackerContext';
 
 interface RequestAssetModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: any) => void;
-  categories: { id: string; name: string }[];
 }
 
-export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, onClose, onSubmit, categories }) => {
+export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, onClose, onSubmit }) => {
+  const { categories } = useAssetTracker();
   const [selectedCategory, setSelectedCategory] = useState<{ id: string; name: string } | null>(null);
   const [priority, setPriority] = useState<'STANDARD' | 'HIGH' | 'CRITICAL'>('STANDARD');
   const [justification, setJustification] = useState('');
@@ -61,8 +61,6 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose}></div>
       <div className="relative bg-white dark:bg-slate-950 w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in flex flex-col border border-slate-200 dark:border-slate-800">
-
-        {/* Header */}
         <div className="p-8 flex items-start justify-between">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center">
@@ -79,7 +77,6 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
         </div>
 
         <div className="px-8 pb-8 space-y-8 overflow-y-auto max-h-[70vh] scrollbar-hide">
-          {/* Category Dropdown */}
           <div className="space-y-3">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Select Category</label>
             <div className="relative">
@@ -116,7 +113,6 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
             </div>
           </div>
 
-          {/* Priority Level */}
           <div className="space-y-3">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Priority Level</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -136,7 +132,6 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
             </div>
           </div>
 
-          {/* Business Justification */}
           <div className="space-y-3">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Business Justification</label>
             <textarea
@@ -148,7 +143,6 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
           </div>
         </div>
 
-        {/* Error Message */}
         {errorMessage && (
           <div className="mx-8 mb-4 flex items-start gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border-2 border-red-100 dark:border-red-800 animate-shake">
             <span className="material-symbols-outlined text-red-500 text-[20px] flex-shrink-0 mt-0.5">error</span>
@@ -156,7 +150,6 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
           </div>
         )}
 
-        {/* Footer Actions */}
         <div className="p-8 pt-4 flex gap-4">
           <button
             disabled={isSubmitting}

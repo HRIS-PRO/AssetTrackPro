@@ -2,6 +2,7 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, UserRole, Asset, Activity, AssetStatus, EquipmentRequest, AssetReport } from '../types';
+import { AuditLog } from './AuditLog';
 
 interface DashboardProps {
   user: User;
@@ -38,7 +39,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         });
         if (res.ok) {
           const cycles = await res.json();
-          // Find the first 'In Progress' audit, or fallback to any planned/completed
           const active = cycles.find((c: any) => c.status === 'In Progress') || cycles[0];
           setActiveAudit(active);
         }
@@ -53,7 +53,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const navigate = useNavigate();
   const [isAccepting, setIsAccepting] = React.useState<string | null>(null);
 
-  // Accept Asset Logic
   const handleAcceptAsset = async (assetId: string) => {
     if (isAccepting) return;
     setIsAccepting(assetId);
@@ -77,7 +76,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  // Unified Stat Cards Calculation
   const stats = useMemo(() => {
     const myAssets = assets.filter(a => a.assignedTo === user.id);
     const totalVal = assets.reduce((acc, curr) => acc + curr.purchasePrice, 0);
@@ -130,17 +128,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
 
     return baseStats;
-  }, [assets, user.id, isSuperAdmin]);
-
-  // Activity Filtering logic used for both Dashboard and Header
-  const filteredActivities = useMemo(() => {
-    return activities.filter(act => {
-      if (isSuperAdmin) return true;
-      const hasPermission = act.roles.includes(user.role);
-      const isForMe = act.targetUserId ? act.targetUserId === user.id : true;
-      return hasPermission && isForMe;
-    });
-  }, [activities, user.id, user.role, isSuperAdmin]);
+  }, [assets, user.id, isSuperAdmin, managedRequests, requests]);
 
   return (
     <div className="space-y-8 pb-12 animate-fade-in">
@@ -172,48 +160,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Recent Activity */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-8 border-b border-slate-50 dark:border-slate-800/50 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">history</span>
-              <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">Recent Activity</h2>
-            </div>
-            <button className="text-blue-600 dark:text-blue-400 font-bold text-sm hover:underline">View History</button>
-          </div>
-
-          <div className="divide-y divide-slate-50 dark:divide-slate-800/50 flex-1">
-            {filteredActivities.length > 0 ? filteredActivities.map((act) => (
-              <div key={act.id} className="p-8 space-y-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors relative">
-                {!act.isRead && (
-                  <div className="absolute top-8 right-8 w-2 h-2 bg-blue-600 rounded-full"></div>
-                )}
-                <div className="flex items-start gap-4">
-                  <div className={`w-12 h-12 bg-${act.color}-50 dark:bg-${act.color}-900/30 rounded-xl flex items-center justify-center text-${act.color}-600 dark:text-${act.color}-400 shrink-0`}>
-                    <span className="material-symbols-outlined">{act.icon}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start">
-                      <h4 className="font-bold text-slate-900 dark:text-white truncate pr-4">{act.title}</h4>
-                      <span className="text-xs font-bold text-slate-400 shrink-0">{act.time}</span>
-                    </div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{act.desc}</p>
-                  </div>
-                </div>
-              </div>
-            )) : (
-              <div className="p-20 text-center flex flex-col items-center gap-4">
-                <span className="material-symbols-outlined text-4xl text-slate-200">history_toggle_off</span>
-                <p className="font-bold text-slate-400">No activities to display.</p>
-              </div>
-            )}
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-h-[500px]">
+        {/* Recent Activity (Extracted) */}
+        <div className="lg:col-span-2">
+           <AuditLog />
         </div>
 
         {/* Side Column: Audit & Actions */}
-        <div className="space-y-8">
-          {/* Pending Asset Assignments */}
+        <div className="space-y-8 overflow-y-auto scrollbar-hide">
           {assets.filter(a => a.assignedTo === user.id && a.status === AssetStatus.PENDING).length > 0 && (
             <div className="bg-amber-50 dark:bg-amber-900/10 rounded-[2.5rem] border border-amber-200 dark:border-amber-800/30 p-8 shadow-sm space-y-6">
               <div className="flex items-center gap-3 mb-2">
