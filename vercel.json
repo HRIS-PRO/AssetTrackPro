@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://hris-pro-backend-production.up.railway.app/:path*"
+      "destination": "https://hris-pro-backend-production-11f2.up.railway.app/:path*"
     },
     {
       "source": "/(.*)",
