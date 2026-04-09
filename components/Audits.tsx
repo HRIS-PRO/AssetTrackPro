@@ -1,12 +1,13 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { UserRole, AuditCycle, VerificationStatus } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Label } from 'recharts';
 import { useAssetTracker } from '../AssetTrackerContext';
 import { AuditLog } from './AuditLog';
 
 export const Audits: React.FC = () => {
-  const { user, assets } = useAssetTracker();
+  const { user, assets, allEmployees, team } = useAssetTracker();
   const [auditCycles, setAuditCycles] = useState<AuditCycle[]>([]);
   const [activeCycle, setActiveCycle] = useState<AuditCycle | null>(null);
   const [activeTab, setActiveTab] = useState<'cycles' | 'stream'>('cycles');
@@ -420,46 +421,126 @@ export const Audits: React.FC = () => {
        {activeTab === 'cycles' ? (
          <>
            {canSeeAnalytics && (
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
-                  <h3 className="text-xl font-black tracking-tight dark:text-white mb-8">System Oversight</h3>
-                  <div className="h-64">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                 <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-[3.5rem] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
+                   <div className="flex justify-between items-start mb-8">
+                      <div>
+                        <h3 className="text-xl font-black tracking-tight dark:text-white">Inventory Integrity</h3>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Current Cycle Distribution</p>
+                      </div>
+                      <div className="flex gap-2">
+                         <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Trend</span>
+                         </div>
+                      </div>
+                   </div>
+
+                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={auditPerformanceData}>
+                      <BarChart data={auditPerformanceData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e120" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 900}} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 900}} />
-                        <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                        <Bar dataKey="value" radius={[10, 10, 0, 0]} barSize={40}>
+                        <XAxis 
+                          dataKey="name" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{fontSize: 9, fontWeight: 900, fill: '#64748b'}} 
+                          dy={10}
+                        />
+                        <YAxis 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{fontSize: 9, fontWeight: 900, fill: '#64748b'}} 
+                        />
+                        <Tooltip 
+                          cursor={{fill: '#f1f5f9', opacity: 0.1}}
+                          contentStyle={{
+                            borderRadius: '24px', 
+                            border: 'none', 
+                            boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)',
+                            backgroundColor: '#0f172a',
+                            padding: '16px'
+                          }}
+                          itemStyle={{color: '#fff', fontSize: '12px', fontWeight: 'bold'}}
+                        />
+                        <Bar dataKey="value" radius={[12, 12, 0, 0]} barSize={45}>
                           {auditPerformanceData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={entry.color} 
+                              fillOpacity={0.8}
+                              className="hover:fill-opacity-100 transition-all duration-300"
+                            />
                           ))}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
-                  </div>
-                </div>
+                   </div>
+                 </div>
 
-                <div className="bg-slate-900 dark:bg-slate-800 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden text-white flex flex-col justify-center items-center">
-                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest absolute top-8">Audit Success</h3>
-                  <div className="w-40 h-40">
+                 <div className="bg-slate-900 dark:bg-blue-950 p-10 rounded-[3.5rem] shadow-2xl relative overflow-hidden text-white flex flex-col items-center group">
+                   <div className="absolute inset-0 bg-blue-600/5 rotate-12 -translate-y-1/2 -translate-x-1/2 blur-3xl group-hover:bg-blue-600/10 transition-all"></div>
+                   
+                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-8 relative z-10">Verification Yield</h3>
+                   
+                   <div className="w-56 h-56 relative z-10">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={auditPerformanceData} innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value" stroke="none">
+                        <Pie 
+                          data={auditPerformanceData} 
+                          innerRadius={65} 
+                          outerRadius={85} 
+                          paddingAngle={8} 
+                          dataKey="value" 
+                          stroke="none"
+                          startAngle={180}
+                          endAngle={-180}
+                        >
                           {auditPerformanceData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
+                            <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                           ))}
+                          <Label 
+                            width={30} 
+                            position="center"
+                            content={({ viewBox: { cx, cy } }: any) => {
+                              const total = auditPerformanceData.reduce((acc, curr) => acc + curr.value, 0);
+                              const verified = auditPerformanceData.find(d => d.name === 'Verified')?.value || 0;
+                              const percentage = total > 0 ? Math.round((verified / total) * 100) : 0;
+                              return (
+                                <g>
+                                  <text x={cx} y={cy - 5} textAnchor="middle" dominantBaseline="middle" className="fill-white text-4xl font-black italic tracking-tighter">
+                                    {percentage}%
+                                  </text>
+                                  <text x={cx} y={cy + 25} textAnchor="middle" dominantBaseline="middle" className="fill-slate-400 text-[10px] font-black uppercase tracking-widest">
+                                    Accuracy
+                                  </text>
+                                </g>
+                              );
+                            }}
+                          />
                         </Pie>
                       </PieChart>
                     </ResponsiveContainer>
-                  </div>
-                  <p className="text-4xl font-black tracking-tighter mt-4">
-                    {auditPerformanceData[0].value + auditPerformanceData[1].value + auditPerformanceData[2].value + auditPerformanceData[3].value + auditPerformanceData[4].value > 0 ? Math.round((auditPerformanceData[0].value / (auditPerformanceData[0].value + auditPerformanceData[1].value + auditPerformanceData[2].value + auditPerformanceData[3].value + auditPerformanceData[4].value)) * 100) : 0}%
-                  </p>
-                  <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Assets Verified</p>
-                  <span className="material-symbols-outlined text-[12rem] absolute -right-12 -top-12 text-white/5 pointer-events-none">insights</span>
-                </div>
-             </div>
+                   </div>
+                   
+                   <div className="mt-8 grid grid-cols-2 gap-x-8 gap-y-2 relative z-10">
+                      {auditPerformanceData.slice(0, 4).map(item => (
+                        <div key={item.name} className="flex items-center gap-2">
+                           <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.color }}></div>
+                           <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{item.name}</span>
+                        </div>
+                      ))}
+                   </div>
+                   
+                   <span className="material-symbols-outlined text-[15rem] absolute -right-20 -bottom-20 text-white/5 pointer-events-none group-hover:scale-110 transition-transform duration-700">shutter_speed</span>
+                 </div>
+              </div>
            )}
 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -508,93 +589,153 @@ export const Audits: React.FC = () => {
          </div>
        )}
 
-       {/* Start New Audit Modal */}
-       {isCreateModalOpen && (
-         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsCreateModalOpen(false)}></div>
-            <div className="relative bg-white dark:bg-slate-900 w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in border border-white/10">
-              <form onSubmit={handleCreateAudit}>
-                <div className="p-10 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                  <h2 className="text-3xl font-black tracking-tight dark:text-white">Start New Audit</h2>
-                  <button type="button" onClick={() => setIsCreateModalOpen(false)} className="w-12 h-12 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-400">
-                    <span className="material-symbols-outlined">close</span>
-                  </button>
-                </div>
-                <div className="p-10 space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 ml-2">Cycle Name</label>
-                    <input 
-                      required
-                      type="text" 
-                      placeholder="e.g. 2024 Year-End Inventory" 
-                      className="w-full px-6 py-4 rounded-[2rem] bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner"
-                      value={newAudit.name}
-                      onChange={e => setNewAudit(prev => ({ ...prev, name: e.target.value }))}
-                    />
+       {isCreateModalOpen && createPortal(
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+             <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl" onClick={() => setIsCreateModalOpen(false)}></div>
+             <div className="relative bg-white dark:bg-slate-950 w-full max-w-4xl rounded-[4rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row h-[85vh]">
+               {/* Side Manifest Info */}
+               <div className="md:w-72 bg-slate-900 p-12 text-white flex flex-col justify-between relative overflow-hidden shrink-0">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/20 blur-[60px] translate-x-10 -translate-y-10"></div>
+                  <div className="space-y-10 relative z-10">
+                     <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/40">
+                        <span className="material-symbols-outlined text-3xl">fact_check</span>
+                     </div>
+                     <div className="space-y-4">
+                        <h2 className="text-3xl font-black tracking-tight leading-tight italic">Initiate Audit Manifest</h2>
+                        <p className="text-xs font-bold text-slate-400 leading-relaxed">Establish a new verification cycle to maintain inventory integrity across all departments.</p>
+                     </div>
+                     <div className="pt-8 border-t border-white/10 space-y-6">
+                        <div className="flex items-center gap-4">
+                           <span className="material-symbols-outlined text-blue-500 text-sm">check_circle</span>
+                           <span className="text-[9px] font-black uppercase tracking-widest opacity-60">System Synchronized</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                           <span className="material-symbols-outlined text-blue-500 text-sm">lock</span>
+                           <span className="text-[9px] font-black uppercase tracking-widest opacity-60">Immutable logs</span>
+                        </div>
+                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 ml-2">Start Date</label>
-                      <input 
-                        required
-                        type="date" 
-                        className="w-full px-6 py-4 rounded-[2rem] bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner"
-                        value={newAudit.startDate}
-                        onChange={e => setNewAudit(prev => ({ ...prev, startDate: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 ml-2">End Date</label>
-                      <input 
-                        required
-                        type="date" 
-                        className="w-full px-6 py-4 rounded-[2rem] bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner"
-                        value={newAudit.endDate}
-                        onChange={e => setNewAudit(prev => ({ ...prev, endDate: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="p-10 bg-slate-50 dark:bg-slate-800/50 flex gap-4">
-                  <button disabled={isCreatingAudit} type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 rounded-full font-black tracking-tight border-2 border-slate-200 dark:border-slate-700 dark:text-white hover:bg-slate-100 transition-colors disabled:opacity-50">Cancel</button>
-                  <button disabled={isCreatingAudit} type="submit" className="flex-1 py-4 rounded-full bg-blue-600 text-white font-black tracking-tight shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-                    {isCreatingAudit && <span className="material-symbols-outlined animate-spin text-lg">sync</span>}
-                    {isCreatingAudit ? 'Initiating...' : 'Initiate Cycle'}
-                  </button>
-                </div>
-              </form>
-            </div>
-         </div>
-       )}
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 italic">AssetTrackPro / v2.1</div>
+               </div>
 
-       {isExportModalOpen && (
-         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsExportModalOpen(false)}></div>
-            <div className="relative bg-white dark:bg-slate-900 w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in border border-white/10">
-              <div className="p-10 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                <h2 className="text-3xl font-black tracking-tight dark:text-white">Export Results</h2>
-                <button onClick={() => setIsExportModalOpen(false)} className="w-12 h-12 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-400">
-                  <span className="material-symbols-outlined">close</span>
-                </button>
-              </div>
-              <div className="p-10 space-y-6">
-                <p className="text-sm font-bold text-slate-500">Select columns to include for <span className="text-slate-900 dark:text-white">{selectedAuditToExport?.name}</span></p>
-                <div className="grid grid-cols-2 gap-4">
-                  {['Asset ID', 'Asset Name', 'Category', 'Condition', 'Result Status', 'Timestamp', 'Notes', 'Location'].map(col => (
-                    <label key={col} className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group">
-                      <input type="checkbox" defaultChecked className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-0" />
-                      <span className="text-sm font-bold dark:text-white group-hover:text-blue-600 transition-colors">{col}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="p-10 bg-slate-50 dark:bg-slate-800/50 flex gap-4">
-                <button onClick={() => setIsExportModalOpen(false)} className="flex-1 py-4 rounded-full font-black tracking-tight border-2 border-slate-200 dark:border-slate-700 dark:text-white hover:bg-slate-100 transition-colors">Cancel</button>
-                <button onClick={performExport} className="flex-1 py-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black tracking-tight shadow-xl hover:scale-105 active:scale-95 transition-all">Download CSV</button>
-              </div>
-            </div>
-         </div>
-       )}
+               {/* Configuration Form */}
+               <form onSubmit={handleCreateAudit} className="flex-1 flex flex-col min-w-0">
+                 <div className="p-10 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-950">
+                   <div>
+                      <h3 className="text-2xl font-black tracking-tighter dark:text-white leading-none">Configuration</h3>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">{assets.length} Assets in scope</p>
+                   </div>
+                   <button type="button" onClick={() => setIsCreateModalOpen(false)} className="w-14 h-14 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-300">
+                     <span className="material-symbols-outlined text-3xl">close</span>
+                   </button>
+                 </div>
+
+                 <div className="p-12 space-y-10 overflow-y-auto bg-slate-50/30 dark:bg-slate-950 flex-1">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
+                     <div className="col-span-full space-y-3">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 ml-4">Audit Objective & Name</label>
+                        <input 
+                          required
+                          type="text" 
+                          placeholder="e.g. Q4 2024 Headquarters High-Value Audit" 
+                          className="w-full px-8 py-5 rounded-[2.5rem] bg-white dark:bg-slate-900 border-2 border-transparent focus:border-blue-600 dark:text-white font-black italic text-lg outline-none transition-all shadow-xl shadow-slate-300/10 dark:shadow-none"
+                          value={newAudit.name}
+                          onChange={e => setNewAudit(prev => ({ ...prev, name: e.target.value }))}
+                        />
+                     </div>
+
+                     <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 ml-4">Deployment Start</label>
+                        <div className="relative group">
+                          <span className="material-symbols-outlined absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors">calendar_month</span>
+                          <input 
+                            required
+                            type="date" 
+                            className="w-full pl-16 pr-8 py-5 rounded-3xl bg-white dark:bg-slate-900 border-2 border-transparent focus:border-blue-600 dark:text-white font-bold text-sm outline-none transition-all shadow-sm"
+                            value={newAudit.startDate}
+                            onChange={e => setNewAudit(prev => ({ ...prev, startDate: e.target.value }))}
+                          />
+                        </div>
+                     </div>
+
+                     <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 ml-4">Target Completion</label>
+                        <div className="relative group">
+                          <span className="material-symbols-outlined absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors">event_upcoming</span>
+                          <input 
+                            required
+                            type="date" 
+                            className="w-full pl-16 pr-8 py-5 rounded-3xl bg-white dark:bg-slate-900 border-2 border-transparent focus:border-blue-600 dark:text-white font-bold text-sm outline-none transition-all shadow-sm"
+                            value={newAudit.endDate}
+                            onChange={e => setNewAudit(prev => ({ ...prev, endDate: e.target.value }))}
+                          />
+                        </div>
+                     </div>
+
+                     <div className="col-span-full space-y-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 ml-4">Assigned Personnel (Auditors)</label>
+                        <div className="flex flex-wrap gap-2 mb-4">
+                           {allEmployees.filter(e => e.role === 'AUDITOR' || e.role === 'SUPER_ADMIN').slice(0, 5).map(aud => (
+                             <button type="button" key={aud.id} className="flex items-center gap-3 px-4 py-2 bg-white dark:bg-slate-900 border-2 border-blue-600 rounded-2xl shadow-sm transition-all">
+                                <img src={aud.avatar} className="w-6 h-6 rounded-lg" alt="" />
+                                <span className="text-[10px] font-black dark:text-white uppercase tracking-tight">{aud.firstName || aud.name}</span>
+                                <span className="material-symbols-outlined text-blue-600 text-sm">person_check</span>
+                             </button>
+                           ))}
+                           <button type="button" className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all">
+                              <span className="material-symbols-outlined text-sm">add</span>
+                           </button>
+                        </div>
+                     </div>
+                   </div>
+                 </div>
+
+                 <div className="p-10 bg-white dark:bg-slate-950 flex gap-4 border-t border-slate-100 dark:border-slate-800">
+                   <button disabled={isCreatingAudit} type="button" onClick={() => setIsCreateModalOpen(false)} className="px-10 py-5 rounded-3xl font-black uppercase text-xs tracking-widest border-2 border-slate-100 dark:border-slate-800 text-slate-400 hover:bg-slate-50 transition-all disabled:opacity-50">Cancel</button>
+                   <button disabled={isCreatingAudit} type="submit" className="flex-1 py-5 rounded-3xl bg-blue-600 text-white font-black uppercase text-xs tracking-widest shadow-2xl shadow-blue-500/30 hover:bg-blue-500 transition-all flex items-center justify-center gap-3 disabled:opacity-50 group">
+                     {isCreatingAudit ? (
+                        <span className="material-symbols-outlined animate-spin text-lg">sync</span>
+                     ) : (
+                        <span className="material-symbols-outlined text-lg group-hover:rotate-12 transition-transform">bolt</span>
+                     )}
+                     {isCreatingAudit ? 'Deploying Manifest...' : 'Deploy Manifest'}
+                   </button>
+                 </div>
+               </form>
+             </div>
+          </div>,
+          document.body
+        )}
+
+       {isExportModalOpen && createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsExportModalOpen(false)}></div>
+             <div className="relative bg-white dark:bg-slate-900 w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in border border-white/10">
+               <div className="p-10 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                 <h2 className="text-3xl font-black tracking-tight dark:text-white">Export Results</h2>
+                 <button onClick={() => setIsExportModalOpen(false)} className="w-12 h-12 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-400">
+                   <span className="material-symbols-outlined">close</span>
+                 </button>
+               </div>
+               <div className="p-10 space-y-6">
+                 <p className="text-sm font-bold text-slate-500">Select columns to include for <span className="text-slate-900 dark:text-white">{selectedAuditToExport?.name}</span></p>
+                 <div className="grid grid-cols-2 gap-4">
+                   {['Asset ID', 'Asset Name', 'Category', 'Condition', 'Result Status', 'Timestamp', 'Notes', 'Location'].map(col => (
+                     <label key={col} className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group">
+                       <input type="checkbox" defaultChecked className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-0" />
+                       <span className="text-sm font-bold dark:text-white group-hover:text-blue-600 transition-colors">{col}</span>
+                     </label>
+                   ))}
+                 </div>
+               </div>
+               <div className="p-10 bg-slate-50 dark:bg-slate-800/50 flex gap-4">
+                 <button onClick={() => setIsExportModalOpen(false)} className="flex-1 py-4 rounded-full font-black tracking-tight border-2 border-slate-200 dark:border-slate-700 dark:text-white hover:bg-slate-100 transition-colors">Cancel</button>
+                 <button onClick={performExport} className="flex-1 py-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black tracking-tight shadow-xl hover:scale-105 active:scale-95 transition-all">Download CSV</button>
+               </div>
+             </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

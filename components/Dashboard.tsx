@@ -78,7 +78,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const stats = useMemo(() => {
     const myAssets = assets.filter(a => a.assignedTo === user.id);
-    const totalVal = assets.reduce((acc, curr) => acc + curr.purchasePrice, 0);
+    const totalVal = assets.reduce((acc, curr) => {
+      const price = typeof curr.purchasePrice === 'string' ? parseFloat(curr.purchasePrice.replace(/,/g, '')) : curr.purchasePrice;
+      return acc + (isNaN(price as number) ? 0 : (price as number));
+    }, 0);
 
     const baseStats: Array<{
       label: string;

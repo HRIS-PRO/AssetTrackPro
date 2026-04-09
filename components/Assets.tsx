@@ -369,7 +369,10 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
             if (h === 'name' || h === 'assetname') entry.name = values[i];
             else if (h === 'category') entry.category = values[i];
             else if (h === 'serial' || h === 'serialnumber') entry.serialNumber = values[i];
-            else if (h === 'price' || h === 'purchaseprice') entry.purchasePrice = values[i];
+            else if (h === 'price' || h === 'purchaseprice') {
+              const p = values[i].replace(/,/g, '');
+              entry.purchasePrice = isNaN(parseFloat(p)) ? 0 : parseFloat(p);
+            }
             else if (h === 'date' || h === 'purchasedate') entry.purchaseDate = values[i];
             else if (h === 'condition') entry.condition = values[i];
             else if (h === 'location') entry.location = values[i];
