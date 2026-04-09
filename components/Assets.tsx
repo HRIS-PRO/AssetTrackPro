@@ -1,5 +1,5 @@
-
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { UserRole, AssetStatus, Asset } from '../types';
 import { useAssetTracker } from '../AssetTrackerContext';
 import { AssetProfile } from './AssetProfile';
@@ -23,6 +23,11 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
   const [selectedLocationFilter, setSelectedLocationFilter] = useState('All');
+
+  const onFilterChange = (setter: React.Dispatch<React.SetStateAction<string>>, val: string) => {
+    setter(val);
+    setCurrentPage(1);
+  };
   
   const [isAdding, setIsAdding] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -32,6 +37,10 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [assetTab, setAssetTab] = useState<'ALL' | 'PENDING_ME'>('ALL');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Bulk Ops Visibility State
   const [isBulkDecommissioning, setIsBulkDecommissioning] = useState(false);
@@ -75,6 +84,13 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       );
     });
   }, [displayAssets, assetTab, user, searchQuery, selectedCategoryFilter, selectedStatusFilter, selectedLocationFilter]);
+
+  const paginatedAssets = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredAssets.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredAssets, currentPage]);
+
+  const totalPages = Math.ceil(filteredAssets.length / itemsPerPage);
 
   const viewingAsset = useMemo(() =>
     assets.find(a => a.id === viewingAssetId), [assets, viewingAssetId]
@@ -397,7 +413,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
     reader.readAsText(file);
   };
 
-  const superAdminModals = (
+  const superAdminModals = createPortal(
     <>
       {/* Reassign Modal */}
       {isReassigningAssetId && (
@@ -478,7 +494,8 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body
   );
 
   if (viewingAsset) {
@@ -540,7 +557,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
             <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none group-focus-within:text-blue-500">category</span>
             <select
               value={selectedCategoryFilter}
-              onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+              onChange={(e) => onFilterChange(setSelectedCategoryFilter, e.target.value)}
               className="w-full pl-12 pr-6 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none font-black text-[10px] uppercase tracking-[0.2em] dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer"
             >
               <option value="All">All Categories</option>
@@ -553,7 +570,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
             <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none group-focus-within:text-blue-500">verified</span>
             <select
               value={selectedStatusFilter}
-              onChange={(e) => setSelectedStatusFilter(e.target.value)}
+              onChange={(e) => onFilterChange(setSelectedStatusFilter, e.target.value)}
               className="w-full pl-12 pr-6 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none font-black text-[10px] uppercase tracking-[0.2em] dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer"
             >
               <option value="All">All Statuses</option>
@@ -566,7 +583,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
             <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none group-focus-within:text-blue-500">location_on</span>
             <select
               value={selectedLocationFilter}
-              onChange={(e) => setSelectedLocationFilter(e.target.value)}
+              onChange={(e) => onFilterChange(setSelectedLocationFilter, e.target.value)}
               className="w-full pl-12 pr-6 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none font-black text-[10px] uppercase tracking-[0.2em] dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer"
             >
               <option value="All">All Locations</option>
@@ -578,8 +595,8 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
 
         <div className="lg:col-span-4 flex justify-between items-center bg-slate-100 dark:bg-slate-800/50 p-1.5 rounded-full border border-slate-200 dark:border-slate-800">
            <div className="flex gap-1">
-             <button onClick={() => setAssetTab('ALL')} className={`px-6 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${assetTab === 'ALL' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Inventory</button>
-             <button onClick={() => setAssetTab('PENDING_ME')} className={`px-6 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 ${assetTab === 'PENDING_ME' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:text-slate-600'}`}>
+             <button onClick={() => { setAssetTab('ALL'); setCurrentPage(1); }} className={`px-6 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${assetTab === 'ALL' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Inventory</button>
+             <button onClick={() => { setAssetTab('PENDING_ME'); setCurrentPage(1); }} className={`px-6 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 ${assetTab === 'PENDING_ME' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:text-slate-600'}`}>
                Assignments {pendingCount > 0 && <span className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px]">{pendingCount}</span>}
              </button>
            </div>
@@ -615,7 +632,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                {filteredAssets.length > 0 ? filteredAssets.map(asset => {
+                {paginatedAssets.length > 0 ? paginatedAssets.map(asset => {
                   const assignedUser = allEmployees.find(u => u.id === asset.assignedTo || u.userId === asset.assignedTo) || team.find(u => u.id === asset.assignedTo);
                   const isSelected = selectedAssetIds.includes(asset.id);
                   return (
@@ -719,7 +736,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fade-in">
-           {filteredAssets.length > 0 ? filteredAssets.map(asset => {
+           {paginatedAssets.length > 0 ? paginatedAssets.map(asset => {
              const isSelected = selectedAssetIds.includes(asset.id);
              return (
                <div 
@@ -767,6 +784,47 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         </div>
       )}
 
+      {/* Premium Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="mt-12 flex justify-center items-center gap-4 animate-fade-in relative z-20">
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="w-14 h-14 rounded-3xl bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 flex items-center justify-center text-slate-400 hover:text-blue-600 disabled:opacity-30 disabled:pointer-events-none transition-all hover:border-blue-500/30 hover:shadow-xl hover:shadow-blue-500/5 group"
+          >
+            <span className="material-symbols-outlined group-hover:-translate-x-1 transition-transform">chevron_left</span>
+          </button>
+          
+          <div className="flex gap-3 bg-white/50 dark:bg-slate-900/50 p-2 rounded-[2rem] backdrop-blur-sm border border-slate-100 dark:border-slate-800">
+            {[...Array(totalPages)].map((_, i) => {
+              const page = i + 1;
+              const isActive = currentPage === page;
+              return (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`w-10 h-10 rounded-2xl font-black text-xs transition-all duration-300 ${
+                    isActive 
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 scale-110' 
+                    : 'text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  {page}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="w-14 h-14 rounded-3xl bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 flex items-center justify-center text-slate-400 hover:text-blue-600 disabled:opacity-30 disabled:pointer-events-none transition-all hover:border-blue-500/30 hover:shadow-xl hover:shadow-blue-500/5 group"
+          >
+            <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">chevron_right</span>
+          </button>
+        </div>
+      )}
+
       {/* Premium Bulk Operations Bar */}
       {selectedAssetIds.length > 0 && (
         <div className="fixed bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-8 bg-slate-900 dark:bg-[#020617] text-white px-10 py-5 rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] z-50 animate-bounce-in border border-white/10 backdrop-blur-3xl">
@@ -798,10 +856,10 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       )}
 
       {/* IMPORT MODAL */}
-      {isImporting && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+      {isImporting && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6 md:p-10">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl" onClick={() => setIsImporting(false)}></div>
-          <div className="relative bg-white dark:bg-slate-950 w-full max-w-2xl rounded-[3rem] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-fade-in flex flex-col">
+          <div className="relative bg-white dark:bg-slate-950 w-full max-w-2xl max-h-[90vh] rounded-[3rem] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-fade-in flex flex-col">
             <div className="p-10 flex items-start justify-between">
               <div className="flex items-center gap-5">
                 <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center rounded-2xl">
@@ -817,7 +875,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
               </button>
             </div>
             
-            <div className="px-10 pb-10 space-y-8">
+            <div className="px-10 pb-10 space-y-8 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
                <div className="grid grid-cols-2 gap-4">
                  <button className="flex flex-col items-center justify-center gap-3 p-8 rounded-[2rem] bg-slate-50 dark:bg-slate-900 border-2 border-transparent hover:border-blue-600 transition-all group">
                     <span className="material-symbols-outlined text-3xl text-slate-300 group-hover:text-blue-600 transition-colors">description</span>
@@ -875,7 +933,8 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <AddAssetWorkflow isAdding={isAdding} setIsAdding={setIsAdding} />
