@@ -109,7 +109,8 @@ export const BulkOperations: React.FC<BulkOperationsProps> = ({
       data: {
         assignedTo: userToAssign.userId || userToAssign.id,
         manager: managerName,
-        department: finalDeptName
+        department: finalDeptName,
+        location: userToAssign.location || 'HQ Office'
       }
     };
 

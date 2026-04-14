@@ -27,7 +27,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, isDarkMode }) => {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password, app: 'ASSET_TRACKER' })
       });
       if (response.ok) {
         setView('otp');
@@ -78,7 +78,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, isDarkMode }) => {
         const response = await fetch('/api/auth/verify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, otp: otpCode })
+          body: JSON.stringify({ email, otp: otpCode, app: 'ASSET_TRACKER' })
         });
 
         if (response.ok) {
@@ -88,7 +88,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, isDarkMode }) => {
           }
 
           // Extract AssetTracker role
-          let assignedRole = UserRole.USER; // Default fallback
+          let assignedRole: UserRole | null = null;
           if (data.user?.roles) {
             const assetRole = data.user.roles.find((r: any) => r.app === 'ASSET_TRACKER');
             if (assetRole) {
@@ -101,6 +101,16 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, isDarkMode }) => {
               };
               assignedRole = roleMap[assetRole.role] || UserRole.USER;
             }
+          }
+
+          if (!assignedRole) {
+            addToast({
+              title: "Access Denied",
+              message: "You do not have permission to access AssetTrack Pro. Please contact your HR administrator.",
+              type: "error"
+            });
+            setIsVerifying(false);
+            return;
           }
 
           const appUser: User = {

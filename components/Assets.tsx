@@ -4,6 +4,7 @@ import { UserRole, AssetStatus, Asset } from '../types';
 import { useAssetTracker } from '../AssetTrackerContext';
 import { AssetProfile } from './AssetProfile';
 import { AddAssetWorkflow } from './AddAssetWorkflow';
+import { EditAssetWorkflow } from './EditAssetWorkflow';
 import { BulkOperations } from './BulkOperations';
 
 interface AssetManagementProps {
@@ -60,6 +61,9 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   const [isSubmittingReassign, setIsSubmittingReassign] = useState(false);
   const [isDecommissioningAssetId, setIsDecommissioningAssetId] = useState<string | null>(null);
   const [isSubmittingDecommission, setIsSubmittingDecommission] = useState(false);
+  const [isUnassigningAssetId, setIsUnassigningAssetId] = useState<string | null>(null);
+  const [isSubmittingUnassign, setIsSubmittingUnassign] = useState(false);
+  const [isEditingAssetId, setIsEditingAssetId] = useState<string | null>(null);
 
   const isAdmin = user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN_USER;
   const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
@@ -77,7 +81,9 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       }
       const query = searchQuery ? searchQuery.toLowerCase() : '';
       return (
-        (a.name.toLowerCase().includes(query) || a.id.toLowerCase().includes(query)) &&
+        (a.name.toLowerCase().includes(query) || 
+         a.id.toLowerCase().includes(query) || 
+         (a.serialNumber && a.serialNumber.toLowerCase().includes(query))) &&
         (selectedCategoryFilter === 'All' || a.category === selectedCategoryFilter) &&
         (selectedStatusFilter === 'All' || a.status === selectedStatusFilter) &&
         (selectedLocationFilter === 'All' || a.location === selectedLocationFilter)
@@ -94,6 +100,10 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
 
   const viewingAsset = useMemo(() =>
     assets.find(a => a.id === viewingAssetId), [assets, viewingAssetId]
+  );
+
+  const editingAsset = useMemo(() =>
+    assets.find(a => a.id === isEditingAssetId), [assets, isEditingAssetId]
   );
 
   const filteredInlineUsers = useMemo(() => {
@@ -218,7 +228,8 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
     const payload = {
       assignedTo: userToAssign.userId || userToAssign.id,
       manager: managerName,
-      department: finalDeptName
+      department: finalDeptName,
+      location: userToAssign.location || 'HQ Office'
     };
 
     try {
@@ -278,7 +289,8 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
     const payload = {
       assignedTo: userToAssign.userId || userToAssign.id,
       manager: managerName,
-      department: finalDeptName
+      department: finalDeptName,
+      location: userToAssign.location || 'HQ Office'
     };
 
     try {
@@ -324,6 +336,28 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       console.error(err);
     } finally {
       setIsSubmittingDecommission(false);
+    }
+  };
+
+  const handleUnassign = async () => {
+    if (!isUnassigningAssetId) return;
+    setIsSubmittingUnassign(true);
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const res = await fetch(`/api/assets/${isUnassigningAssetId}/unassign`, {
+        method: 'PUT',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      if (res.ok) {
+        const updatedAsset = await res.json();
+        setAssets(prev => prev.map(a => a.id === isUnassigningAssetId ? updatedAsset : a));
+        setIsUnassigningAssetId(null);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingUnassign(false);
     }
   };
 
@@ -497,29 +531,66 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
           </div>
         </div>
       )}
+
+      {/* Unassign Modal */}
+      {isUnassigningAssetId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsUnassigningAssetId(null)}></div>
+          <div className="relative bg-white dark:bg-slate-950 w-full max-w-lg rounded-[3rem] shadow-2xl p-10 md:p-14 text-center space-y-8 animate-fade-in border border-blue-500/20">
+            <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 text-blue-500 rounded-2xl flex items-center justify-center mx-auto shadow-xl shadow-blue-500/10">
+              <span className="material-symbols-outlined text-4xl">restart_alt</span>
+            </div>
+            <div className="space-y-4">
+              <h2 className="text-3xl font-black italic tracking-tighter dark:text-white uppercase">Unassign Unit?</h2>
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 leading-relaxed px-4">
+                This action will revoke the current custodian's rights to this equipment and return it to the <span className="text-blue-500 underline underline-offset-4">IDLE</span> inventory.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <button onClick={handleUnassign} disabled={isSubmittingUnassign} className="w-full py-5 rounded-2xl bg-blue-600 text-white font-black uppercase text-xs tracking-widest shadow-2xl shadow-blue-500/30 hover:bg-blue-500 transition-all flex items-center justify-center gap-3">
+                {isSubmittingUnassign ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined text-lg">check_circle</span>}
+                Confirm Unassignment
+              </button>
+              <button onClick={() => setIsUnassigningAssetId(null)} className="w-full py-5 rounded-2xl bg-slate-50 dark:bg-slate-900 text-slate-500 font-black uppercase text-xs tracking-widest hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-100 dark:border-slate-800">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>,
     document.body
   );
 
   if (viewingAsset) {
     return (
-      <AssetProfile
-        viewingAsset={viewingAsset}
-        user={user!}
-        onBack={() => setViewingAssetId(null)}
-        getStatusColor={getStatusColor}
-        acceptAsset={acceptAsset}
-        onReportAsset={onReportAsset}
-        setIsReassigningAssetId={setIsReassigningAssetId}
-        setIsDecommissioningAssetId={setIsDecommissioningAssetId}
-        allEmployees={allEmployees}
-        team={team}
-        superAdminModals={superAdminModals}
-      />
+      <>
+        <AssetProfile
+          viewingAsset={viewingAsset}
+          user={user!}
+          onBack={() => setViewingAssetId(null)}
+          getStatusColor={getStatusColor}
+          acceptAsset={acceptAsset}
+          onReportAsset={onReportAsset}
+          setIsReassigningAssetId={setIsReassigningAssetId}
+          setIsDecommissioningAssetId={setIsDecommissioningAssetId}
+          setIsUnassigningAssetId={setIsUnassigningAssetId}
+          onModifyAsset={setIsEditingAssetId}
+          allEmployees={allEmployees}
+          team={team}
+          superAdminModals={superAdminModals}
+        />
+        <EditAssetWorkflow 
+          isEditing={!!isEditingAssetId} 
+          setIsEditing={(val) => !val && setIsEditingAssetId(null)}
+          asset={editingAsset || null}
+        />
+      </>
     );
   }
 
   return (
+    <>
     <div className="space-y-8 animate-fade-in pb-12 relative">
       {/* Premium Header */}
       <div className="flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-end">
@@ -657,11 +728,17 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                           </div>
                           <div>
                             <p className="font-black text-slate-900 dark:text-white leading-tight group-hover:text-blue-600 transition-colors uppercase tracking-tight">{asset.name}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                               <span className="text-xs font-mono font-bold text-slate-400 group-hover:text-slate-500">#{asset.id.slice(0, 8)}</span>
-                               <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{asset.category}</span>
-                            </div>
+                             <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <span className="text-[10px] font-mono font-bold text-slate-400 group-hover:text-slate-500">#{asset.id.slice(0, 8)}</span>
+                                {asset.serialNumber && (
+                                  <>
+                                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                                    <span className="text-[10px] font-mono font-bold text-blue-500/80 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded italic">S/N: {asset.serialNumber}</span>
+                                  </>
+                                )}
+                                <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{asset.category}</span>
+                             </div>
                           </div>
                         </div>
                       </td>
@@ -708,17 +785,30 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                         </div>
                       </td>
                       <td className="px-8 py-8 text-right">
-                        {asset.status === AssetStatus.PENDING && (asset.assignedTo === user?.id || asset.assignedTo === user?.userId) && (
-                          <button 
-                            onClick={e => { e.stopPropagation(); acceptAsset(asset.id); }} 
-                            className="bg-blue-600 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all"
-                          >
-                             {isAcceptingAsset === asset.id ? 'Processing...' : 'Accept Assignment'}
+                        <div className="flex items-center justify-end gap-2">
+                          {asset.status === AssetStatus.PENDING && (asset.assignedTo === user?.id || asset.assignedTo === user?.userId) && (
+                            <button 
+                              onClick={e => { e.stopPropagation(); acceptAsset(asset.id); }} 
+                              className="bg-blue-600 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all"
+                            >
+                               {isAcceptingAsset === asset.id ? 'Processing...' : 'Accept Assignment'}
+                            </button>
+                          )}
+                          
+                          {isAdmin && asset.assignedTo && asset.status !== AssetStatus.DECOMMISSIONED && (
+                            <button 
+                              onClick={e => { e.stopPropagation(); setIsUnassigningAssetId(asset.id); }} 
+                              title="Unassign Unit"
+                              className="w-10 h-10 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center hover:bg-white dark:hover:bg-slate-800 text-slate-400 hover:text-blue-600 transition-all"
+                            >
+                               <span className="material-symbols-outlined text-[20px]">link_off</span>
+                            </button>
+                          )}
+
+                          <button onClick={e => { e.stopPropagation(); setIsEditingAssetId(asset.id); }} className="p-3 rounded-xl opacity-0 group-hover:opacity-100 hover:bg-white dark:hover:bg-slate-800 text-slate-500 transition-all">
+                             <span className="material-symbols-outlined">more_horiz</span>
                           </button>
-                        )}
-                        <button className="p-3 rounded-xl opacity-0 group-hover:opacity-100 hover:bg-white dark:hover:bg-slate-800 text-slate-500 transition-all">
-                           <span className="material-symbols-outlined">more_horiz</span>
-                        </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -761,10 +851,16 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                     
                     <div className="space-y-1">
                       <h3 className="text-lg font-black dark:text-white leading-tight uppercase tracking-tight truncate w-full px-2">{asset.name}</h3>
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex flex-wrap items-center justify-center gap-2">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{asset.category}</span>
                         <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
                         <span className="text-[10px] font-mono font-bold text-slate-400">#{asset.id.slice(0, 8)}</span>
+                        {asset.serialNumber && (
+                          <>
+                            <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                            <span className="text-[10px] font-mono font-bold text-blue-500/80">S/N: {asset.serialNumber}</span>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -956,6 +1052,13 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       />
 
       {superAdminModals}
+
+      <EditAssetWorkflow 
+        isEditing={!!isEditingAssetId} 
+        setIsEditing={(val) => !val && setIsEditingAssetId(null)}
+        asset={editingAsset || null}
+      />
     </div>
+    </>
   );
 };

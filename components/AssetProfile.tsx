@@ -11,6 +11,8 @@ interface AssetProfileProps {
   onReportAsset?: (id: string) => void;
   setIsReassigningAssetId: (id: string) => void;
   setIsDecommissioningAssetId: (id: string) => void;
+  setIsUnassigningAssetId: (id: string) => void;
+  onModifyAsset: (id: string) => void;
   allEmployees: any[];
   team: User[];
   superAdminModals: React.ReactNode;
@@ -18,7 +20,7 @@ interface AssetProfileProps {
 
 export const AssetProfile: React.FC<AssetProfileProps> = ({
   viewingAsset, user, onBack, getStatusColor, acceptAsset, onReportAsset, 
-  setIsReassigningAssetId, setIsDecommissioningAssetId, allEmployees, team, superAdminModals
+  setIsReassigningAssetId, setIsDecommissioningAssetId, setIsUnassigningAssetId, onModifyAsset, allEmployees, team, superAdminModals
 }) => {
   const isSuperAdmin = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN_USER;
   const isAuditor = user.role === UserRole.AUDITOR;
@@ -65,7 +67,7 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
              </button>
            )}
            {(isSuperAdmin || isAuditor) && (
-             <button className="flex-1 md:flex-none btn-primary group">
+             <button onClick={() => onModifyAsset(viewingAsset.id)} className="flex-1 md:flex-none btn-primary group">
                <span className="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">edit_square</span>
                Modify Data
              </button>
@@ -110,6 +112,13 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
                 <span className="material-symbols-outlined text-slate-400 group-hover:text-indigo-500">fact_check</span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Audit History</span>
              </button>
+
+             {isSuperAdmin && viewingAsset.assignedTo && viewingAsset.status !== 'DECOMMISSIONED' && (
+               <button onClick={() => setIsUnassigningAssetId(viewingAsset.id)} className="action-card group-unassign border-blue-500/20 hover:border-blue-500">
+                  <span className="material-symbols-outlined text-slate-400 group-hover:text-blue-500">restart_alt</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Unassign Unit</span>
+               </button>
+             )}
 
              {isSuperAdmin && viewingAsset.assignedTo && viewingAsset.status !== 'DECOMMISSIONED' && (
                <button onClick={() => setIsReassigningAssetId(viewingAsset.id)} className="action-card group-reassign">
