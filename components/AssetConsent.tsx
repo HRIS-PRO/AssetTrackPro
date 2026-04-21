@@ -8,13 +8,14 @@ interface AssetConsentProps {
 }
 
 export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => {
-  const { assets } = useAssetTracker();
+  const { assets, refreshAll } = useAssetTracker();
   const { assetId } = useParams<{ assetId: string }>();
   const navigate = useNavigate();
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [hasSigned, setHasSigned] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const asset = assets.find(a => a.id === assetId) || assets[0];
 
@@ -80,6 +81,35 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
   const handleCopySN = () => {
     if (asset.serialNumber) {
       navigator.clipboard.writeText(asset.serialNumber);
+    }
+  };
+
+  const handleConfirmAsset = async () => {
+    setIsSubmitting(true);
+    
+    let signatureData = null;
+    if (canvasRef.current && hasSigned) {
+      signatureData = canvasRef.current.toDataURL('image/png');
+    }
+
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const res = await fetch(`/api/assets/${asset.id}/accept`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ consentSignature: signatureData })
+      });
+      if (!res.ok) throw new Error('Failed to accept asset');
+      await refreshAll?.(); // Call the destructured function
+      setIsConfirmed(true);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to confirm asset receipt. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -196,8 +226,11 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
               </div>
               <div className="prose prose-slate dark:prose-invert max-w-none text-sm font-bold text-slate-500 dark:text-slate-400 leading-relaxed space-y-4">
                 <p>By clicking "Confirm Receipt", I acknowledge that I have received the asset described above. I agree to maintain the equipment in good working condition and report any loss, theft, or damage immediately to the IT department.</p>
-                <p>I understand that this asset is the property of AssetTrackPro Inc. and must be returned upon termination of employment or upon request by management.</p>
+                <p>I understand that this asset is the property of AssetTrackPro Inc. and must be returned upon termination of employment or upon request by management. Use of this equipment must comply with the corporate Acceptable Use Policy.</p>
               </div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-6">
+                REQUEST GENERATED: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).toUpperCase()} • IP: 192.168.1.45 • REF: {asset.id}
+              </p>
            </div>
 
            <div className="space-y-4 pt-4">
@@ -236,12 +269,12 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
              Report Issue / Wrong Item
            </button>
            <button 
-             onClick={() => setIsConfirmed(true)}
-             disabled={!hasSigned}
-             className={`w-full sm:w-auto px-16 py-5 rounded-2xl bg-[#1985f0] text-white font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-500/30 hover:bg-blue-600 transition-all flex items-center justify-center gap-3 ${!hasSigned ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
+             onClick={handleConfirmAsset}
+             disabled={!hasSigned || isSubmitting}
+             className={`w-full sm:w-auto px-16 py-5 rounded-2xl bg-[#1985f0] text-white font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-500/30 transition-all flex items-center justify-center gap-3 ${(!hasSigned || isSubmitting) ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95 hover:bg-blue-600'}`}
            >
-             <span className="material-symbols-outlined text-lg">thumb_up</span>
-             Confirm Receipt
+             <span className="material-symbols-outlined text-lg">{isSubmitting ? 'hourglass_empty' : 'thumb_up'}</span>
+             {isSubmitting ? 'Confirming...' : 'Confirm Receipt'}
            </button>
         </div>
       </div>

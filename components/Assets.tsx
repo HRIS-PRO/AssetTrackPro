@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { UserRole, AssetStatus, Asset } from '../types';
 import { useAssetTracker } from '../AssetTrackerContext';
 import { AssetProfile } from './AssetProfile';
@@ -20,6 +21,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
     departments, assetLocations, team, allEmployees
   } = useAssetTracker();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
@@ -180,21 +182,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   };
 
   const acceptAsset = async (assetId: string) => {
-    setIsAcceptingAsset(assetId);
-    try {
-      const token = localStorage.getItem('asset_track_token');
-      const res = await fetch(`/api/assets/${assetId}/accept`, {
-        method: 'PUT',
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      if (res.ok) {
-        setAssets(prev => prev.map(a => a.id === assetId ? { ...a, status: AssetStatus.ACTIVE } : a));
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsAcceptingAsset(null);
-    }
+    navigate(`/consent/${assetId}`);
   };
 
   const handleInlineAssign = async (assetId: string, userToAssign: any) => {
@@ -788,10 +776,10 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                         <div className="flex items-center justify-end gap-2">
                           {asset.status === AssetStatus.PENDING && (asset.assignedTo === user?.id || asset.assignedTo === user?.userId) && (
                             <button 
-                              onClick={e => { e.stopPropagation(); acceptAsset(asset.id); }} 
+                              onClick={e => { e.stopPropagation(); navigate(`/consent/${asset.id}`); }} 
                               className="bg-blue-600 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all"
                             >
-                               {isAcceptingAsset === asset.id ? 'Processing...' : 'Accept Assignment'}
+                               Review Assignment
                             </button>
                           )}
                           

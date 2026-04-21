@@ -188,12 +188,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-black uppercase rounded-lg">Review</span>
                     </div>
                     <button
-                      disabled={isAccepting === asset.id}
-                      onClick={() => handleAcceptAsset(asset.id)}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs tracking-widest uppercase rounded-xl transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                      onClick={() => navigate(`/consent/${asset.id}`)}
+                      className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs tracking-widest uppercase rounded-xl transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-2"
                     >
-                      {isAccepting === asset.id && <span className="material-symbols-outlined text-[14px] animate-spin flex-shrink-0">sync</span>}
-                      {isAccepting === asset.id ? 'Accepting...' : 'Accept Asset'}
+                      Review Assignment
                     </button>
                   </div>
                 ))}
