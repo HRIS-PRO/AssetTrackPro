@@ -16,6 +16,7 @@ import { Reports } from './components/Reports';
 import { RequestAssetModal } from './components/RequestAssetModal';
 import { ReportProblemModal } from './components/ReportProblemModal';
 import { AssetConsent } from './components/AssetConsent';
+import { AssetConsentDocument } from './components/AssetConsentDocument';
 import { ToastProvider, useToast } from './components/Toast';
 import { useReportSocket } from './hooks/useReportSocket';
 import { ReportStatus, EquipmentRequest } from './types';
@@ -235,6 +236,7 @@ const AppContent: React.FC = () => {
             <Route path="/consent/:assetId" element={<AssetConsent
               onReportIssue={(id) => { setModalInitialAssetId(id); setActiveModal('report'); }}
             />} />
+            <Route path="/consent/:assetId/document" element={<AssetConsentDocument />} />
             <Route path="/requests" element={<Requests
               onRequestAsset={() => setActiveModal('request')}
             />} />

@@ -103,8 +103,8 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
         body: JSON.stringify({ consentSignature: signatureData })
       });
       if (!res.ok) throw new Error('Failed to accept asset');
-      await refreshAll?.(); // Call the destructured function
-      setIsConfirmed(true);
+      await refreshAll?.(); 
+      navigate(`/consent/${asset.id}/document`);
     } catch (err) {
       console.error(err);
       alert('Failed to confirm asset receipt. Please try again.');
@@ -113,25 +113,7 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
     }
   };
 
-  if (isConfirmed) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8 animate-fade-in text-center">
-        <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 shadow-2xl shadow-green-500/20">
-          <span className="material-symbols-outlined text-5xl">verified</span>
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-4xl font-black tracking-tight dark:text-white">Custody Confirmed</h2>
-          <p className="text-slate-500 font-bold max-w-sm mx-auto">Your digital signature has been recorded and the asset inventory has been updated.</p>
-        </div>
-        <button 
-          onClick={() => navigate('/')}
-          className="px-10 py-4 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-full font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-all"
-        >
-          Return to Dashboard
-        </button>
-      </div>
-    );
-  }
+
 
   return (
     <div className="max-w-5xl mx-auto space-y-10 py-6 pb-20 animate-fade-in">

@@ -49,7 +49,7 @@ export const Reports: React.FC = () => {
   }
 
   const kpis = useMemo(() => {
-    const totalVal = assets.reduce((sum, a) => sum + a.purchasePrice, 0);
+    const totalVal = assets.reduce((sum, a) => sum + (Number(a.purchasePrice) || 0), 0);
     const decommissioned = assets.filter(a => a.status === AssetStatus.DECOMMISSIONED || a.status === AssetStatus.LOST).length;
     return [
       { label: 'TOTAL INVENTORY VALUE', value: new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(totalVal), icon: 'payments', color: 'blue' },
@@ -238,7 +238,7 @@ export const Reports: React.FC = () => {
                     {visibleColumns.includes('name') && <td className="px-8 py-5 font-bold dark:text-white text-sm">{asset.name}</td>}
                     {visibleColumns.includes('department') && <td className="px-8 py-5 text-sm font-bold text-slate-500">{asset.department || '—'}</td>}
                     {visibleColumns.includes('category') && <td className="px-8 py-5 text-[10px] font-black uppercase text-slate-400">{asset.category}</td>}
-                    {visibleColumns.includes('purchasePrice') && <td className="px-8 py-5 font-black text-sm dark:text-white">₦{asset.purchasePrice.toLocaleString()}</td>}
+                    {visibleColumns.includes('purchasePrice') && <td className="px-8 py-5 font-black text-sm dark:text-white">₦{Number(asset.purchasePrice || 0).toLocaleString()}</td>}
                     {visibleColumns.includes('status') && <td className="px-8 py-5">{getStatusBadge(asset.status)}</td>}
                     {visibleColumns.includes('purchaseDate') && <td className="px-8 py-5 text-xs font-bold text-slate-400">{asset.purchaseDate}</td>}
                   </tr>

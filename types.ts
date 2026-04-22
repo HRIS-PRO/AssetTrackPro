@@ -43,6 +43,22 @@ export interface Asset {
   modelNumber?: string;
   serialNumber?: string;
   tags?: string[];
+  consentSignature?: string;
+  hrConsentSubmitted?: boolean;
+}
+
+export interface AssetLifecycleLog {
+  id: string;
+  assetId: string;
+  performedById: string;
+  actionType: string;
+  previousAssigneeId?: string | null;
+  newAssigneeId?: string | null;
+  metadata?: any;
+  createdAt: string;
+  performedBy?: { id: string; name: string; firstName?: string; lastName?: string; email: string; avatarUrl?: string };
+  previousAssignee?: { id: string; name: string; firstName?: string; lastName?: string; email: string; avatarUrl?: string } | null;
+  newAssignee?: { id: string; name: string; firstName?: string; lastName?: string; email: string; avatarUrl?: string } | null;
 }
 
 export enum RequestPriority {

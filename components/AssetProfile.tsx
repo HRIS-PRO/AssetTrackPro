@@ -1,6 +1,8 @@
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, Asset, AssetStatus, UserRole } from '../types';
+import { AssetLifecycleTimeline } from './AssetLifecycleTimeline';
 
 interface AssetProfileProps {
   viewingAsset: Asset;
@@ -24,6 +26,8 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
 }) => {
   const isSuperAdmin = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN_USER;
   const isAuditor = user.role === UserRole.AUDITOR;
+  const navigate = useNavigate();
+  const [showAudit, setShowAudit] = React.useState(false);
 
   const getCategoryIcon = (cat: string) => {
     const c = cat.toLowerCase();
@@ -103,15 +107,27 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
                </button>
              )}
              
+             {viewingAsset.status === AssetStatus.ACTIVE && !viewingAsset.hrConsentSubmitted && (viewingAsset.assignedTo === user.id || viewingAsset.assignedTo === user.userId) && (
+               <button onClick={() => navigate(`/consent/${viewingAsset.id}/document`)} className="col-span-2 action-card-special hover:border-blue-600 hover:bg-blue-50/30">
+                  <span className="material-symbols-outlined text-3xl text-blue-500">outgoing_mail</span>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Pending Document</p>
+                    <p className="text-sm font-black text-blue-600">SEND CONSENT TO HR</p>
+                  </div>
+               </button>
+             )}
+             
              <button className="action-card group-repair">
                 <span className="material-symbols-outlined text-slate-400 group-hover:text-amber-500">build_circle</span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Maintenance</span>
              </button>
              
-             <button className="action-card group-audit">
-                <span className="material-symbols-outlined text-slate-400 group-hover:text-indigo-500">fact_check</span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Audit History</span>
-             </button>
+             {(isSuperAdmin || isAuditor) && (
+               <button onClick={() => setShowAudit(!showAudit)} className={`action-card group-audit ${showAudit ? 'border-indigo-500 bg-indigo-50/10' : ''}`}>
+                  <span className={`material-symbols-outlined group-hover:text-indigo-500 ${showAudit ? 'text-indigo-500' : 'text-slate-400'}`}>fact_check</span>
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${showAudit ? 'text-indigo-600' : 'text-slate-400'}`}>Audit History</span>
+               </button>
+             )}
 
              {isSuperAdmin && viewingAsset.assignedTo && viewingAsset.status !== 'DECOMMISSIONED' && (
                <button onClick={() => setIsUnassigningAssetId(viewingAsset.id)} className="action-card group-unassign border-blue-500/20 hover:border-blue-500">
@@ -177,43 +193,51 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
            </div>
 
            {/* Custodian Card */}
-           <div className="bg-slate-900 dark:bg-blue-950/20 rounded-[3.5rem] p-10 md:p-14 text-white shadow-2xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] group-hover:bg-blue-600/20 transition-all"></div>
-              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
-                 <div className="space-y-8 flex-1">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                         <span className="material-symbols-outlined">person_outline</span>
-                      </div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/50">Current Custodian</p>
-                    </div>
-
-                    {assignedUser ? (
-                      <div className="flex items-center gap-6">
-                        <img src={assignedUser.avatar} className="w-24 h-24 rounded-[2rem] border-4 border-white/10 p-1 bg-white/5 shadow-2xl" alt="" />
-                        <div className="space-y-2">
-                           <h4 className="text-3xl font-black italic tracking-tighter">{assignedUser.name || assignedUser.firstName}</h4>
-                           <div className="flex flex-wrap gap-2">
-                              <span className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest">{assignedUser.department}</span>
-                              <span className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest">{assignedUser.location || 'HQ Office'}</span>
-                           </div>
+           {!showAudit && (
+             <div className="bg-slate-900 dark:bg-blue-950/20 rounded-[3.5rem] p-10 md:p-14 text-white shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] group-hover:bg-blue-600/20 transition-all"></div>
+                <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
+                   <div className="space-y-8 flex-1">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                           <span className="material-symbols-outlined">person_outline</span>
                         </div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/50">Current Custodian</p>
                       </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <h4 className="text-3xl font-black italic tracking-tighter text-white/20 uppercase">No Data Found</h4>
-                        <p className="text-sm font-bold text-white/40">This asset is currently in the general warehouse awaiting assignment.</p>
-                      </div>
-                    )}
-                 </div>
 
-                 {isSuperAdmin && !assignedUser && (
-                   <button onClick={() => setIsReassigningAssetId(viewingAsset.id)} className="px-10 py-5 bg-blue-600 text-white rounded-3xl font-black uppercase text-xs tracking-widest hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/40">
-                     Assign Unit
-                   </button>
-                 )}
-              </div>
-           </div>
+                      {assignedUser ? (
+                        <div className="flex items-center gap-6">
+                          <img src={assignedUser.avatar} className="w-24 h-24 rounded-[2rem] border-4 border-white/10 p-1 bg-white/5 shadow-2xl" alt="" />
+                          <div className="space-y-2">
+                             <h4 className="text-3xl font-black italic tracking-tighter">{assignedUser.name || assignedUser.firstName}</h4>
+                             <div className="flex flex-wrap gap-2">
+                                <span className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest">{assignedUser.department}</span>
+                                <span className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest">{assignedUser.location || 'HQ Office'}</span>
+                             </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <h4 className="text-3xl font-black italic tracking-tighter text-white/20 uppercase">No Data Found</h4>
+                          <p className="text-sm font-bold text-white/40">This asset is currently in the general warehouse awaiting assignment.</p>
+                        </div>
+                      )}
+                   </div>
+
+                   {isSuperAdmin && !assignedUser && (
+                     <button onClick={() => setIsReassigningAssetId(viewingAsset.id)} className="px-10 py-5 bg-blue-600 text-white rounded-3xl font-black uppercase text-xs tracking-widest hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/40">
+                       Assign Unit
+                     </button>
+                   )}
+                </div>
+             </div>
+           )}
+
+           {showAudit && (
+             <div className="bg-white dark:bg-slate-900 rounded-[3.5rem] border-[4px] border-slate-100 dark:border-slate-800 p-10 md:p-14 shadow-2xl mt-8">
+               <AssetLifecycleTimeline assetId={viewingAsset.id} />
+             </div>
+           )}
         </div>
       </div>
       {superAdminModals}
