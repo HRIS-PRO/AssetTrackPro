@@ -29,6 +29,7 @@ export enum AssetStatus {
 
 export interface Asset {
   id: string;
+  assetNumber?: string; // Human-facing display number (e.g. AST-NF-00001)
   name: string;
   category: string;
   assignedTo: string; // User ID

@@ -43,6 +43,10 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
   const itemsPerPage = 10;
 
   // Bulk Ops Visibility State
@@ -81,17 +85,27 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         if (a.status !== AssetStatus.PENDING) return false;
         if (a.assignedTo !== user?.id && a.assignedTo !== user?.userId) return false;
       }
-      const query = searchQuery ? searchQuery.toLowerCase() : '';
+      const query = searchQuery ? searchQuery.trim().toLowerCase() : '';
+      let matchesQuery = !query;
+      if (query) {
+        const assignedUser = allEmployees.find(u => u.id === a.assignedTo || u.userId === a.assignedTo) || team.find(u => u.id === a.assignedTo);
+        const assigneeName = assignedUser
+          ? `${assignedUser.name || ''} ${assignedUser.firstName || ''} ${assignedUser.surname || assignedUser.lastName || ''} ${assignedUser.email || ''}`
+          : '';
+        const haystack = [
+          a.name, a.id, a.serialNumber, a.modelNumber, a.category,
+          a.department, a.location, a.manager, a.condition, assigneeName,
+        ].filter(Boolean).join(' ').toLowerCase();
+        matchesQuery = haystack.includes(query);
+      }
       return (
-        (a.name.toLowerCase().includes(query) || 
-         a.id.toLowerCase().includes(query) || 
-         (a.serialNumber && a.serialNumber.toLowerCase().includes(query))) &&
+        matchesQuery &&
         (selectedCategoryFilter === 'All' || a.category === selectedCategoryFilter) &&
         (selectedStatusFilter === 'All' || a.status === selectedStatusFilter) &&
         (selectedLocationFilter === 'All' || a.location === selectedLocationFilter)
       );
     });
-  }, [displayAssets, assetTab, user, searchQuery, selectedCategoryFilter, selectedStatusFilter, selectedLocationFilter]);
+  }, [displayAssets, assetTab, user, searchQuery, selectedCategoryFilter, selectedStatusFilter, selectedLocationFilter, allEmployees, team]);
 
   const paginatedAssets = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -717,7 +731,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                           <div>
                             <p className="font-black text-slate-900 dark:text-white leading-tight group-hover:text-blue-600 transition-colors uppercase tracking-tight">{asset.name}</p>
                              <div className="flex flex-wrap items-center gap-2 mt-1">
-                                <span className="text-[10px] font-mono font-bold text-slate-400 group-hover:text-slate-500">#{asset.id.slice(0, 8)}</span>
+                                <span className="text-[10px] font-mono font-bold text-slate-400 group-hover:text-slate-500">{asset.assetNumber || `#${asset.id.slice(0, 8)}`}</span>
                                 {asset.serialNumber && (
                                   <>
                                     <span className="w-1 h-1 bg-slate-300 rounded-full"></span>

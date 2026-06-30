@@ -1,6 +1,6 @@
 
 import React, { useState, useLayoutEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { UserRole, User, AssetReport } from './types';
 import { MOCK_USERS } from './constants';
 import { Sidebar } from './components/Sidebar';
@@ -17,6 +17,7 @@ import { RequestAssetModal } from './components/RequestAssetModal';
 import { ReportProblemModal } from './components/ReportProblemModal';
 import { AssetConsent } from './components/AssetConsent';
 import { AssetConsentDocument } from './components/AssetConsentDocument';
+import { ScanView } from './components/ScanView';
 import { ToastProvider, useToast } from './components/Toast';
 import { useReportSocket } from './hooks/useReportSocket';
 import { ReportStatus, EquipmentRequest } from './types';
@@ -29,6 +30,7 @@ const AppContent: React.FC = () => {
     setManagedReports, loading, refreshAll
   } = useAssetTracker();
 
+  const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
@@ -190,6 +192,15 @@ const AppContent: React.FC = () => {
     onRequestCreated: handleRequestCreated,
     onRequestStatusUpdated: handleRequestStatusUpdated
   });
+
+  // Public QR scan page — accessible without authentication.
+  if (location.pathname.startsWith('/scan/')) {
+    return (
+      <Routes>
+        <Route path="/scan/:id" element={<ScanView />} />
+      </Routes>
+    );
+  }
 
   if (!user) {
     return <Auth onLogin={handleLogin} isDarkMode={isDarkMode} />;

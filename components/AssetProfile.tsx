@@ -3,6 +3,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Asset, AssetStatus, UserRole } from '../types';
 import { AssetLifecycleTimeline } from './AssetLifecycleTimeline';
+import { DigitalTag } from './DigitalTag';
 
 interface AssetProfileProps {
   viewingAsset: Asset;
@@ -28,6 +29,7 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
   const isAuditor = user.role === UserRole.AUDITOR;
   const navigate = useNavigate();
   const [showAudit, setShowAudit] = React.useState(false);
+  const [showDigitalTag, setShowDigitalTag] = React.useState(false);
 
   const getCategoryIcon = (cat: string) => {
     const c = cat.toLowerCase();
@@ -65,7 +67,7 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
 
         <div className="flex flex-wrap gap-4 w-full xl:w-auto">
            {isSuperAdmin && (
-             <button className="flex-1 md:flex-none btn-secondary group">
+             <button onClick={() => setShowDigitalTag(true)} className="flex-1 md:flex-none btn-secondary group">
                <span className="material-symbols-outlined text-xl group-hover:rotate-12 transition-transform">qr_code_2</span>
                Digital Tag
              </button>
@@ -90,7 +92,7 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
                 </span>
                 <div className="absolute inset-x-0 bottom-8 flex justify-center">
                    <div className="px-4 py-2 bg-white dark:bg-slate-900 rounded-2xl shadow-xl flex items-center gap-2 border border-slate-100 dark:border-slate-800">
-                      <span className="text-[10px] font-mono font-bold text-slate-400">UID: {viewingAsset.id.slice(0, 12)}</span>
+                      <span className="text-[10px] font-mono font-bold text-slate-400">{viewingAsset.assetNumber || `UID: ${viewingAsset.id.slice(0, 12)}`}</span>
                    </div>
                 </div>
              </div>
@@ -241,6 +243,9 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
         </div>
       </div>
       {superAdminModals}
+      {showDigitalTag && (
+        <DigitalTag asset={viewingAsset} onClose={() => setShowDigitalTag(false)} />
+      )}
     </div>
   );
 };
