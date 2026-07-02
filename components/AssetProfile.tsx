@@ -3,6 +3,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Asset, AssetStatus, UserRole } from '../types';
 import { AssetLifecycleTimeline } from './AssetLifecycleTimeline';
+import { AssetAuditLog } from './AssetAuditLog';
 import { DigitalTag } from './DigitalTag';
 
 interface AssetProfileProps {
@@ -30,6 +31,7 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
   const navigate = useNavigate();
   const [showAudit, setShowAudit] = React.useState(false);
   const [showDigitalTag, setShowDigitalTag] = React.useState(false);
+  const [logRefresh, setLogRefresh] = React.useState(0);
 
   const getCategoryIcon = (cat: string) => {
     const c = cat.toLowerCase();
@@ -236,8 +238,18 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
            )}
 
            {showAudit && (
-             <div className="bg-white dark:bg-slate-900 rounded-[3.5rem] border-[4px] border-slate-100 dark:border-slate-800 p-10 md:p-14 shadow-2xl mt-8">
-               <AssetLifecycleTimeline assetId={viewingAsset.id} />
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8 items-start">
+               {/* Left: audit log with manual entry */}
+               <AssetAuditLog
+                 assetId={viewingAsset.id}
+                 canLog={isSuperAdmin || isAuditor}
+                 refreshKey={logRefresh}
+                 onLogged={() => setLogRefresh(k => k + 1)}
+               />
+               {/* Right: visual lifecycle timeline */}
+               <div className="bg-white dark:bg-slate-900 rounded-[3.5rem] border-[4px] border-slate-100 dark:border-slate-800 p-8 md:p-10 shadow-2xl">
+                 <AssetLifecycleTimeline assetId={viewingAsset.id} refreshKey={logRefresh} />
+               </div>
              </div>
            )}
         </div>

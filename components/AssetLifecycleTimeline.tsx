@@ -3,10 +3,11 @@ import { AssetLifecycleLog } from '../types';
 
 interface Props {
   assetId: string;
+  refreshKey?: number;
 }
 
 
-export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId }) => {
+export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId, refreshKey }) => {
   const [logs, setLogs] = useState<AssetLifecycleLog[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,7 +33,7 @@ export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId }) => {
       }
     };
     fetchLogs();
-  }, [assetId]);
+  }, [assetId, refreshKey]);
 
   if (loading) {
     return (
@@ -95,6 +96,11 @@ export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId }) => {
               colorClass = "text-red-500 bg-red-50";
               badgeColor = "bg-red-100 text-red-700";
               break;
+            case 'NOTE':
+              icon = "sticky_note_2";
+              colorClass = "text-slate-600 bg-slate-100";
+              badgeColor = "bg-slate-200 text-slate-700";
+              break;
           }
 
           return (
@@ -149,13 +155,31 @@ export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId }) => {
                    </div>
                  )}
 
-                 {/* Metadata */}
-                 {log.metadata && Object.keys(log.metadata).length > 0 && (
-                   <div className="mt-4">
-                     <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Technical Metadata</p>
-                     <pre className="text-[10px] font-mono text-slate-500 bg-slate-50 dark:bg-slate-800 p-4 rounded-xl overflow-x-auto">
-                       {JSON.stringify(log.metadata, null, 2)}
-                     </pre>
+                 {/* Manual note */}
+                 {log.metadata?.note && (
+                   <p className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-relaxed bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl">
+                     {log.metadata.note}
+                   </p>
+                 )}
+
+                 {/* Status transition */}
+                 {log.metadata?.oldStatus && log.metadata?.newStatus && log.metadata.oldStatus !== log.metadata.newStatus && (
+                   <div className="flex items-center gap-2 mt-2 text-xs font-black uppercase tracking-widest">
+                     <span className="text-slate-400">{log.metadata.oldStatus}</span>
+                     <span className="material-symbols-outlined text-sm text-slate-300">arrow_right_alt</span>
+                     <span className="text-slate-700 dark:text-slate-200">{log.metadata.newStatus}</span>
+                   </div>
+                 )}
+
+                 {/* Changed fields */}
+                 {log.metadata?.changes && Object.keys(log.metadata.changes).length > 0 && (
+                   <div className="flex flex-wrap gap-2 mt-3">
+                     {Object.entries(log.metadata.changes).map(([k, v]) => (
+                       <span key={k} className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-50 dark:bg-slate-800 rounded-lg text-[10px] font-bold text-slate-500 dark:text-slate-300">
+                         <span className="text-slate-400 capitalize">{k}:</span>
+                         <span className="text-slate-700 dark:text-slate-200 truncate max-w-[160px]">{v === null || v === '' ? '—' : String(v)}</span>
+                       </span>
+                     ))}
                    </div>
                  )}
               </div>
