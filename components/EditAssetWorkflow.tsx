@@ -24,6 +24,7 @@ export const EditAssetWorkflow: React.FC<EditAssetWorkflowProps> = ({
   const [showUserDropdown, setShowUserDropdown] = React.useState(false);
   const [photoFile, setPhotoFile] = React.useState<File | null>(null);
   const [errors, setErrors] = React.useState<Record<string, boolean>>({});
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
 
   const newPhotoPreview = React.useMemo(() => photoFile ? URL.createObjectURL(photoFile) : null, [photoFile]);
   React.useEffect(() => () => { if (newPhotoPreview) URL.revokeObjectURL(newPhotoPreview); }, [newPhotoPreview]);
@@ -68,8 +69,17 @@ export const EditAssetWorkflow: React.FC<EditAssetWorkflowProps> = ({
         setUserSearch('');
       }
       setPhotoFile(null);
+      setSubmitError(null);
+      setErrors({});
     }
   }, [asset, allEmployees, team]);
+
+  const fieldLabels: Record<string, string> = {
+    name: 'Unit Name',
+    category: 'Hardware Category',
+    serialNumber: 'Serial Number',
+    purchasePrice: 'Market Valuation'
+  };
 
   const validate = () => {
     const newErrors: Record<string, boolean> = {};
@@ -78,7 +88,13 @@ export const EditAssetWorkflow: React.FC<EditAssetWorkflowProps> = ({
       if (!formData[field as keyof typeof formData]) newErrors[field] = true;
     });
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const missing = Object.keys(newErrors);
+    if (missing.length > 0) {
+      setSubmitError(`Required: ${missing.map(f => fieldLabels[f] || f).join(', ')}`);
+      return false;
+    }
+    setSubmitError(null);
+    return true;
   };
 
   const handleUpdate = async () => {
@@ -117,9 +133,13 @@ export const EditAssetWorkflow: React.FC<EditAssetWorkflowProps> = ({
         setAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
         onAssetUpdated?.(updatedAsset);
         setShowSuccess(true);
+      } else {
+        const errBody = await response.json().catch(() => null);
+        setSubmitError(errBody?.message || `Update failed (HTTP ${response.status}). Please try again.`);
       }
     } catch (err) {
       console.error(err);
+      setSubmitError('Network error — could not reach the server. Please try again.');
     } finally {
       setIsUpdatingAsset(false);
     }
@@ -245,15 +265,28 @@ export const EditAssetWorkflow: React.FC<EditAssetWorkflowProps> = ({
                   </div>
                </div>
 
-               <div className="p-10 border-t border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex gap-4">
-                  <button onClick={() => setIsEditing(false)} className="flex-1 py-5 rounded-2xl border-2 border-slate-100 dark:border-slate-800 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">Cancel</button>
-                  <button 
-                    onClick={handleUpdate} 
-                    disabled={isUpdatingAsset}
-                    className="flex-[2] btn-primary"
-                  >
-                    {isUpdatingAsset ? <span className="material-symbols-outlined animate-spin">sync</span> : 'Update Asset Profile'}
-                  </button>
+               <div className="p-10 border-t border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-4">
+                  {submitError && (
+                    <div className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 animate-fade-in">
+                       <span className="material-symbols-outlined text-red-500 text-xl">error</span>
+                       <p className="text-xs font-bold text-red-600 dark:text-red-400">{submitError}</p>
+                    </div>
+                  )}
+                  <div className="flex gap-4">
+                    <button onClick={() => setIsEditing(false)} disabled={isUpdatingAsset} className="flex-1 py-5 rounded-2xl border-2 border-slate-100 dark:border-slate-800 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all disabled:opacity-50">Cancel</button>
+                    <button
+                      onClick={handleUpdate}
+                      disabled={isUpdatingAsset}
+                      className="flex-[2] btn-primary disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    >
+                      {isUpdatingAsset ? (
+                        <>
+                          <span className="material-symbols-outlined animate-spin">sync</span>
+                          Updating…
+                        </>
+                      ) : 'Update Asset Profile'}
+                    </button>
+                  </div>
                </div>
             </div>
           </>

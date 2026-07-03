@@ -28,6 +28,7 @@ export const AddAssetWorkflow: React.FC<AddAssetWorkflowProps> = ({
   const [showUserDropdown, setShowUserDropdown] = React.useState(false);
   const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
   const [errors, setErrors] = React.useState<Record<string, boolean>>({});
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
 
   const photoPreview = React.useMemo(() => receiptFile ? URL.createObjectURL(receiptFile) : null, [receiptFile]);
   React.useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
@@ -46,6 +47,16 @@ export const AddAssetWorkflow: React.FC<AddAssetWorkflowProps> = ({
     location: '',
   });
 
+  const fieldLabels: Record<string, string> = {
+    name: 'Unit Name',
+    category: 'Hardware Category',
+    serialNumber: 'Serial Number',
+    purchasePrice: 'Market Valuation',
+    assignedTo: 'Custody Assignment',
+    manager: 'Manager',
+    department: 'Department'
+  };
+
   const validate = (type?: 'consent') => {
     const newErrors: Record<string, boolean> = {};
     const required = ['name', 'category', 'serialNumber', 'purchasePrice'];
@@ -54,7 +65,13 @@ export const AddAssetWorkflow: React.FC<AddAssetWorkflowProps> = ({
       if (!formData[field as keyof typeof formData]) newErrors[field] = true;
     });
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const missing = Object.keys(newErrors);
+    if (missing.length > 0) {
+      setSubmitError(`Required: ${missing.map(f => fieldLabels[f] || f).join(', ')}`);
+      return false;
+    }
+    setSubmitError(null);
+    return true;
   };
 
   const handleSave = async (type?: 'consent') => {
@@ -80,9 +97,13 @@ export const AddAssetWorkflow: React.FC<AddAssetWorkflowProps> = ({
         setLastAddedAsset(newAsset);
         onAssetAdded?.(newAsset);
         setShowSuccess(true);
+      } else {
+        const errBody = await response.json().catch(() => null);
+        setSubmitError(errBody?.message || `Creation failed (HTTP ${response.status}). Please try again.`);
       }
     } catch (err) {
       console.error(err);
+      setSubmitError('Network error — could not reach the server. Please try again.');
     } finally {
       setIsCreatingAsset(false);
     }
@@ -242,15 +263,28 @@ export const AddAssetWorkflow: React.FC<AddAssetWorkflowProps> = ({
                   </div>
                </div>
 
-               <div className="p-10 border-t border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex gap-4">
-                  <button onClick={() => setIsAdding(false)} className="flex-1 py-5 rounded-2xl border-2 border-slate-100 dark:border-slate-800 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">Cancel</button>
-                  <button 
-                    onClick={() => handleSave(formData.assignedTo ? 'consent' : undefined)} 
-                    disabled={isCreatingAsset}
-                    className="flex-[2] btn-primary"
-                  >
-                    {isCreatingAsset ? <span className="material-symbols-outlined animate-spin">sync</span> : (formData.assignedTo ? 'Commit & Send for Consent' : 'Commit to Storage')}
-                  </button>
+               <div className="p-10 border-t border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-4">
+                  {submitError && (
+                    <div className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 animate-fade-in">
+                       <span className="material-symbols-outlined text-red-500 text-xl">error</span>
+                       <p className="text-xs font-bold text-red-600 dark:text-red-400">{submitError}</p>
+                    </div>
+                  )}
+                  <div className="flex gap-4">
+                    <button onClick={() => setIsAdding(false)} disabled={isCreatingAsset} className="flex-1 py-5 rounded-2xl border-2 border-slate-100 dark:border-slate-800 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all disabled:opacity-50">Cancel</button>
+                    <button
+                      onClick={() => handleSave(formData.assignedTo ? 'consent' : undefined)}
+                      disabled={isCreatingAsset}
+                      className="flex-[2] btn-primary disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    >
+                      {isCreatingAsset ? (
+                        <>
+                          <span className="material-symbols-outlined animate-spin">sync</span>
+                          Saving…
+                        </>
+                      ) : (formData.assignedTo ? 'Commit & Send for Consent' : 'Commit to Storage')}
+                    </button>
+                  </div>
                </div>
             </div>
           </>
