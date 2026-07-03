@@ -29,6 +29,9 @@ export const AddAssetWorkflow: React.FC<AddAssetWorkflowProps> = ({
   const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
   const [errors, setErrors] = React.useState<Record<string, boolean>>({});
 
+  const photoPreview = React.useMemo(() => receiptFile ? URL.createObjectURL(receiptFile) : null, [receiptFile]);
+  React.useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
+
   const [formData, setFormData] = React.useState({
     name: '',
     condition: 'Brand New',
@@ -179,6 +182,24 @@ export const AddAssetWorkflow: React.FC<AddAssetWorkflowProps> = ({
                          </div>
                        </div>
                        <InputGroup label="Acquisition Date" value={formData.purchaseDate} onChange={v => setFormData({...formData, purchaseDate: v})} type="date" />
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Unit Photo (Optional)</label>
+                       {photoPreview ? (
+                         <div className="relative w-full h-52 rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800">
+                            <img src={photoPreview} className="w-full h-full object-cover" alt="Asset preview" />
+                            <button onClick={() => setReceiptFile(null)} className="absolute top-3 right-3 w-10 h-10 rounded-full bg-slate-900/70 backdrop-blur text-white flex items-center justify-center hover:bg-red-600 transition-colors">
+                               <span className="material-symbols-outlined text-sm">delete</span>
+                            </button>
+                         </div>
+                       ) : (
+                         <label className="flex flex-col items-center justify-center gap-2 w-full h-32 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-600 transition-colors">
+                            <span className="material-symbols-outlined text-3xl text-slate-300">add_a_photo</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Attach Unit Image / Receipt</span>
+                            <input type="file" accept="image/*" className="hidden" onChange={e => setReceiptFile(e.target.files?.[0] || null)} />
+                         </label>
+                       )}
                     </div>
 
                     <div className="space-y-2">

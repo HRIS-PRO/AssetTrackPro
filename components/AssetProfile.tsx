@@ -88,10 +88,14 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
         <div className="xl:col-span-4 space-y-8">
           <div className="relative group overflow-hidden bg-white dark:bg-slate-900 rounded-[3.5rem] border-[4px] border-slate-100 dark:border-slate-800 p-12 aspect-square flex flex-col items-center justify-center shadow-2xl transition-all">
              <div className="absolute inset-0 bg-blue-600/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-             <div className="relative w-full h-full bg-slate-50 dark:bg-slate-800/30 rounded-[2.5rem] flex items-center justify-center text-slate-200 dark:text-slate-700 group-hover:scale-105 transition-transform duration-700">
-                <span className="material-symbols-outlined text-[10rem] group-hover:text-blue-600/20 transition-colors">
-                  {getCategoryIcon(viewingAsset.category)}
-                </span>
+             <div className="relative w-full h-full bg-slate-50 dark:bg-slate-800/30 rounded-[2.5rem] overflow-hidden flex items-center justify-center text-slate-200 dark:text-slate-700 group-hover:scale-105 transition-transform duration-700">
+                {viewingAsset.fileUrl ? (
+                  <img src={viewingAsset.fileUrl} alt={viewingAsset.name} className="absolute inset-0 w-full h-full object-cover" />
+                ) : (
+                  <span className="material-symbols-outlined text-[10rem] group-hover:text-blue-600/20 transition-colors">
+                    {getCategoryIcon(viewingAsset.category)}
+                  </span>
+                )}
                 <div className="absolute inset-x-0 bottom-8 flex justify-center">
                    <div className="px-4 py-2 bg-white dark:bg-slate-900 rounded-2xl shadow-xl flex items-center gap-2 border border-slate-100 dark:border-slate-800">
                       <span className="text-[10px] font-mono font-bold text-slate-400">{viewingAsset.assetNumber || `UID: ${viewingAsset.id.slice(0, 12)}`}</span>

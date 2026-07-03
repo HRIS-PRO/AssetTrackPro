@@ -22,7 +22,12 @@ export const EditAssetWorkflow: React.FC<EditAssetWorkflowProps> = ({
   const [isUpdatingAsset, setIsUpdatingAsset] = React.useState(false);
   const [userSearch, setUserSearch] = React.useState('');
   const [showUserDropdown, setShowUserDropdown] = React.useState(false);
+  const [photoFile, setPhotoFile] = React.useState<File | null>(null);
   const [errors, setErrors] = React.useState<Record<string, boolean>>({});
+
+  const newPhotoPreview = React.useMemo(() => photoFile ? URL.createObjectURL(photoFile) : null, [photoFile]);
+  React.useEffect(() => () => { if (newPhotoPreview) URL.revokeObjectURL(newPhotoPreview); }, [newPhotoPreview]);
+  const photoPreview = newPhotoPreview || asset?.fileUrl || null;
 
   const [formData, setFormData] = React.useState({
     name: '',
@@ -62,6 +67,7 @@ export const EditAssetWorkflow: React.FC<EditAssetWorkflowProps> = ({
       } else {
         setUserSearch('');
       }
+      setPhotoFile(null);
     }
   }, [asset, allEmployees, team]);
 
@@ -86,13 +92,24 @@ export const EditAssetWorkflow: React.FC<EditAssetWorkflowProps> = ({
 
     try {
       const token = localStorage.getItem('asset_track_token');
+      let body: BodyInit;
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+      if (photoFile) {
+        // Send multipart so the backend uploads the new photo alongside the field updates
+        const submitData = new FormData();
+        submitData.append('receipt', photoFile);
+        submitData.append('data', JSON.stringify(payload));
+        body = submitData;
+      } else {
+        headers['Content-Type'] = 'application/json';
+        body = JSON.stringify(payload);
+      }
+
       const response = await fetch(`/api/assets/${asset.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(payload)
+        headers,
+        body
       });
       
       if (response.ok) {
@@ -197,6 +214,33 @@ export const EditAssetWorkflow: React.FC<EditAssetWorkflowProps> = ({
                          value={formData.description}
                          onChange={e => setFormData({...formData, description: e.target.value})}
                        />
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Unit Photo</label>
+                       {photoPreview ? (
+                         <div className="relative w-full h-52 rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 group/photo">
+                            <img src={photoPreview} className="w-full h-full object-cover" alt="Asset" />
+                            <div className="absolute inset-x-0 bottom-0 p-3 flex justify-center gap-3 bg-gradient-to-t from-slate-900/70 to-transparent">
+                               <label className="px-5 py-2.5 rounded-full bg-white/90 text-slate-900 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white transition-colors flex items-center gap-2">
+                                  <span className="material-symbols-outlined text-sm">photo_camera</span>
+                                  Replace Image
+                                  <input type="file" accept="image/*" className="hidden" onChange={e => setPhotoFile(e.target.files?.[0] || null)} />
+                               </label>
+                               {photoFile && (
+                                 <button onClick={() => setPhotoFile(null)} className="px-5 py-2.5 rounded-full bg-slate-900/70 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-600 transition-colors">
+                                    Undo
+                                 </button>
+                               )}
+                            </div>
+                         </div>
+                       ) : (
+                         <label className="flex flex-col items-center justify-center gap-2 w-full h-32 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-600 transition-colors">
+                            <span className="material-symbols-outlined text-3xl text-slate-300">add_a_photo</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Attach Unit Image</span>
+                            <input type="file" accept="image/*" className="hidden" onChange={e => setPhotoFile(e.target.files?.[0] || null)} />
+                         </label>
+                       )}
                     </div>
                   </div>
                </div>

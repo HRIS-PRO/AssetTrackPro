@@ -15,6 +15,7 @@ interface PublicAsset {
   condition?: string;
   purchaseDate?: string;
   custodianName?: string | null;
+  fileUrl?: string | null;
 }
 
 const StatusBadge: React.FC<{ status?: string }> = ({ status }) => {
@@ -62,7 +63,7 @@ export const ScanView: React.FC = () => {
 
   const handleExport = async () => {
     if (!cardRef.current) return;
-    const canvas = await html2canvas(cardRef.current, { scale: 2, backgroundColor: '#ffffff' });
+    const canvas = await html2canvas(cardRef.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -98,6 +99,14 @@ export const ScanView: React.FC = () => {
         {!loading && asset && (
           <>
             <div ref={cardRef} className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-10 shadow-2xl border border-slate-200 dark:border-slate-800">
+              {asset.fileUrl && (
+                <img
+                  src={asset.fileUrl}
+                  crossOrigin="anonymous"
+                  alt={asset.name}
+                  className="w-full h-56 object-cover rounded-3xl mb-8 border border-slate-100 dark:border-slate-800"
+                />
+              )}
               <div className="flex items-start justify-between gap-4 mb-8">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-500 mb-1">{asset.assetNumber || asset.id}</p>

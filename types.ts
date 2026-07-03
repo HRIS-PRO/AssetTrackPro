@@ -46,6 +46,7 @@ export interface Asset {
   tags?: string[];
   consentSignature?: string;
   hrConsentSubmitted?: boolean;
+  fileUrl?: string; // Public URL of the asset photo/receipt in Supabase storage
 }
 
 export interface AssetLifecycleLog {

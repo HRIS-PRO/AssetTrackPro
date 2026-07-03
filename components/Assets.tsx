@@ -725,8 +725,12 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                       </td>
                       <td className="px-4 py-8">
                         <div className="flex items-center gap-5">
-                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 group-hover:bg-white group-hover:text-blue-600'}`}>
-                             <span className="material-symbols-outlined text-2xl">{getCategoryIcon(asset.category)}</span>
+                          <div className={`w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 group-hover:bg-white group-hover:text-blue-600'}`}>
+                             {asset.fileUrl ? (
+                               <img src={asset.fileUrl} className="w-full h-full object-cover" alt="" />
+                             ) : (
+                               <span className="material-symbols-outlined text-2xl">{getCategoryIcon(asset.category)}</span>
+                             )}
                           </div>
                           <div>
                             <p className="font-black text-slate-900 dark:text-white leading-tight group-hover:text-blue-600 transition-colors uppercase tracking-tight">{asset.name}</p>
@@ -847,8 +851,12 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                  </button>
 
                  <div className="flex flex-col items-center text-center space-y-5 pt-4">
-                    <div className={`w-20 h-20 rounded-3xl flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 group-hover:scale-110 group-hover:text-blue-600 group-hover:bg-blue-50'}`}>
-                       <span className="material-symbols-outlined text-4xl">{getCategoryIcon(asset.category)}</span>
+                    <div className={`w-20 h-20 rounded-3xl overflow-hidden flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 group-hover:scale-110 group-hover:text-blue-600 group-hover:bg-blue-50'}`}>
+                       {asset.fileUrl ? (
+                         <img src={asset.fileUrl} className="w-full h-full object-cover" alt="" />
+                       ) : (
+                         <span className="material-symbols-outlined text-4xl">{getCategoryIcon(asset.category)}</span>
+                       )}
                     </div>
                     
                     <div className="space-y-1">
