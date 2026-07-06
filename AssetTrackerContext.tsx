@@ -1,6 +1,20 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Asset, Activity, EquipmentRequest, AssetReport, UserRole } from './types';
+import { applyTheme, DEFAULT_THEME_ID } from './themes';
+
+export interface OrgSettings {
+  orgName: string;
+  contactEmail: string;
+  theme: string;
+  updatedAt?: string;
+}
+
+const DEFAULT_ORG_SETTINGS: OrgSettings = {
+  orgName: 'AssetTrackPro Enterprise',
+  contactEmail: 'admin@assettrack.pro',
+  theme: DEFAULT_THEME_ID,
+};
 
 interface AssetTrackerContextType {
   user: User | null;
@@ -29,6 +43,8 @@ interface AssetTrackerContextType {
   superAdmins: { id: string, email: string }[];
   loading: boolean;
   refreshAll: () => Promise<void>;
+  orgSettings: OrgSettings;
+  saveOrgSettings: (updates: Partial<OrgSettings>) => Promise<OrgSettings>;
 }
 
 const AssetTrackerContext = createContext<AssetTrackerContextType | undefined>(undefined);
@@ -68,6 +84,47 @@ export const AssetTrackerProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [activities, setActivities] = useState<Activity[]>([]);
   const [superAdmins, setSuperAdmins] = useState<{ id: string, email: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [orgSettings, setOrgSettings] = useState<OrgSettings>(DEFAULT_ORG_SETTINGS);
+
+  // Org settings are public (no auth) so branding/theme load before login
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/org-settings');
+        if (res.ok) {
+          const data = await res.json();
+          setOrgSettings(data);
+          applyTheme(data.theme);
+        }
+      } catch (err) {
+        console.error('Failed to fetch org settings', err);
+      }
+    })();
+  }, []);
+
+  const saveOrgSettings = useCallback(async (updates: Partial<OrgSettings>): Promise<OrgSettings> => {
+    const token = localStorage.getItem('asset_track_token');
+    const res = await fetch('/api/org-settings', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(updates)
+    });
+    if (!res.ok) {
+      let message = 'Failed to save organization settings';
+      try {
+        const body = await res.json();
+        if (body?.message) message = body.message;
+      } catch { /* non-JSON error body */ }
+      throw new Error(message);
+    }
+    const saved = await res.json();
+    setOrgSettings(saved);
+    applyTheme(saved.theme);
+    return saved;
+  }, []);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -148,11 +205,13 @@ export const AssetTrackerProvider: React.FC<{ children: React.ReactNode }> = ({ 
     assetLocations, setAssetLocations, requests, setRequests,
     managedRequests, setManagedRequests, faultyReports, setFaultyReports,
     managedReports, setManagedReports, activities, setActivities,
-    superAdmins, loading, refreshAll: fetchData
+    superAdmins, loading, refreshAll: fetchData,
+    orgSettings, saveOrgSettings
   }), [
-    user, setUser, assets, setAssets, team, setTeam, allEmployees, departments, setDepartments, categories, setCategories, 
-    assetLocations, setAssetLocations, requests, setRequests, managedRequests, setManagedRequests, faultyReports, setFaultyReports, 
-    managedReports, setManagedReports, activities, setActivities, superAdmins, loading, fetchData
+    user, setUser, assets, setAssets, team, setTeam, allEmployees, departments, setDepartments, categories, setCategories,
+    assetLocations, setAssetLocations, requests, setRequests, managedRequests, setManagedRequests, faultyReports, setFaultyReports,
+    managedReports, setManagedReports, activities, setActivities, superAdmins, loading, fetchData,
+    orgSettings, saveOrgSettings
   ]);
 
 

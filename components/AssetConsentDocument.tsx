@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf';
 import { useAssetTracker } from '../AssetTrackerContext';
 
 export const AssetConsentDocument: React.FC = () => {
-  const { assets, refreshAll } = useAssetTracker();
+  const { assets, refreshAll, orgSettings } = useAssetTracker();
   const { assetId } = useParams<{ assetId: string }>();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -143,10 +143,18 @@ export const AssetConsentDocument: React.FC = () => {
 
       <div id="consent-document" className="bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col transition-colors">
         <div className="p-8 md:p-12 flex flex-col md:flex-row gap-12 border-b border-slate-100 dark:border-slate-800">
-          <div className="w-full md:w-80 h-64 bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] flex items-center justify-center border-2 border-slate-100 dark:border-slate-700/50 shrink-0 overflow-hidden group">
-             <span className="material-symbols-outlined text-[8rem] text-slate-200 dark:text-slate-700 group-hover:scale-110 transition-transform duration-700">
-               {asset.category?.toLowerCase().includes('laptop') ? 'laptop_mac' : 'inventory_2'}
-             </span>
+          <div className="relative w-full md:w-80 h-64 bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] flex items-center justify-center border-2 border-slate-100 dark:border-slate-700/50 shrink-0 overflow-hidden group">
+             {asset.fileUrl ? (
+               <img
+                 src={asset.fileUrl}
+                 alt={asset.name}
+                 className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+               />
+             ) : (
+               <span className="material-symbols-outlined text-[8rem] text-slate-200 dark:text-slate-700 group-hover:scale-110 transition-transform duration-700">
+                 {asset.category?.toLowerCase().includes('laptop') ? 'laptop_mac' : 'inventory_2'}
+               </span>
+             )}
           </div>
           
           <div className="flex-1 space-y-6">
@@ -220,7 +228,7 @@ export const AssetConsentDocument: React.FC = () => {
               </div>
               <div className="prose prose-slate dark:prose-invert max-w-none text-sm font-bold text-slate-500 dark:text-slate-400 leading-relaxed space-y-4">
                 <p>I acknowledge that I have received the asset described above. I agree to maintain the equipment in good working condition and report any loss, theft, or damage immediately to the IT department.</p>
-                <p>I understand that this asset is the property of AssetTrackPro Inc. and must be returned upon termination of employment or upon request by management. Use of this equipment must comply with the corporate Acceptable Use Policy.</p>
+                <p>I understand that this asset is the property of {orgSettings.orgName} and must be returned upon termination of employment or upon request by management. Use of this equipment must comply with the corporate Acceptable Use Policy.</p>
               </div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-6">
                 REF: {asset.id}

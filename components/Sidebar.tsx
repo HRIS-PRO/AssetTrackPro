@@ -2,6 +2,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { User, UserRole } from '../types';
+import { useAssetTracker } from '../AssetTrackerContext';
 
 interface SidebarProps {
   user: User;
@@ -21,6 +22,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRoleChange
 }) => {
   const location = useLocation();
+  const { orgSettings } = useAssetTracker();
 
   const navItems = [
     { label: 'Dashboard', path: '/', icon: 'dashboard', roles: [UserRole.USER, UserRole.AUDITOR, UserRole.ADMIN_USER, UserRole.SUPER_ADMIN] },
@@ -46,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Toggle Button */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`absolute -right-4 top-10 w-8 h-8 bg-[#1985f0] text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-50 border-2 border-white dark:border-slate-950`}
+          className={`absolute -right-4 top-10 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-50 border-2 border-white dark:border-slate-950`}
         >
           <span className="material-symbols-outlined text-sm">
             {isOpen ? 'chevron_left' : 'chevron_right'}
@@ -68,10 +70,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {isOpen && (
             <div className="flex flex-col leading-none animate-fade-in whitespace-nowrap overflow-hidden">
               <span className="font-black italic text-xl tracking-tight text-slate-900 dark:text-white uppercase">
-                ASSETTRACK<span className="text-[#1985f0]">PRO</span>
+                ASSETTRACK<span className="text-blue-500">PRO</span>
               </span>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">
-                ENTERPRISE SUITE
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5 truncate max-w-[180px]">
+                {orgSettings.orgName}
               </span>
             </div>
           )}

@@ -4,14 +4,18 @@ import { User, UserRole } from '../types';
 import { InviteMemberModal } from './InviteMemberModal';
 import { EditMemberModal } from './EditMemberModal';
 import { useAssetTracker } from '../AssetTrackerContext';
+import { THEMES, applyTheme } from '../themes';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const Settings: React.FC = () => {
-  const { 
-    user, 
-    team, setTeam, 
-    categories, setCategories, 
-    departments, setDepartments, 
-    assetLocations, setAssetLocations 
+  const {
+    user,
+    team, setTeam,
+    categories, setCategories,
+    departments, setDepartments,
+    assetLocations, setAssetLocations,
+    orgSettings, saveOrgSettings
   } = useAssetTracker();
 
   const [activeTab, setActiveTab] = useState('general');
@@ -19,11 +23,76 @@ export const Settings: React.FC = () => {
   const [selectedSA, setSelectedSA] = useState('');
   const [newDept, setNewDept] = useState('');
   const [newLoc, setNewLoc] = useState('');
-  const [orgName, setOrgName] = useState('AssetTrackPro Enterprise');
-  const [orgColor, setOrgColor] = useState('#2563eb');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isEditCategory, setIsEditCategory] = useState(false);
   const [isEditLocation, setIsEditLocation] = useState(false);
+
+  // General tab form state (synced from saved org settings)
+  const [formName, setFormName] = useState(orgSettings.orgName);
+  const [formEmail, setFormEmail] = useState(orgSettings.contactEmail);
+  const [formTheme, setFormTheme] = useState(orgSettings.theme);
+  const [isSavingGeneral, setIsSavingGeneral] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const savedThemeRef = useRef(orgSettings.theme);
+
+  const isOrgAdmin = user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.ADMIN_USER;
+
+  // Re-sync the form whenever fresh settings arrive from the server
+  useEffect(() => {
+    setFormName(orgSettings.orgName);
+    setFormEmail(orgSettings.contactEmail);
+    setFormTheme(orgSettings.theme);
+    savedThemeRef.current = orgSettings.theme;
+  }, [orgSettings]);
+
+  // If a previewed theme was never saved, revert to the saved one on unmount
+  useEffect(() => {
+    return () => applyTheme(savedThemeRef.current);
+  }, []);
+
+  const isDirty =
+    formName !== orgSettings.orgName ||
+    formEmail !== orgSettings.contactEmail ||
+    formTheme !== orgSettings.theme;
+
+  const nameError = formName.trim().length < 2 ? 'Organization name must be at least 2 characters' : null;
+  const emailError = !EMAIL_REGEX.test(formEmail.trim()) ? 'Enter a valid contact email' : null;
+  const formValid = !nameError && !emailError;
+
+  const handleThemePreview = (themeId: string) => {
+    if (!isOrgAdmin) return;
+    setFormTheme(themeId);
+    applyTheme(themeId, false); // live preview without persisting
+  };
+
+  const handleDiscardGeneral = () => {
+    setFormName(orgSettings.orgName);
+    setFormEmail(orgSettings.contactEmail);
+    setFormTheme(orgSettings.theme);
+    setSaveError(null);
+    applyTheme(orgSettings.theme);
+  };
+
+  const handleSaveGeneral = async () => {
+    if (!formValid || isSavingGeneral) return;
+    setIsSavingGeneral(true);
+    setSaveError(null);
+    try {
+      await saveOrgSettings({
+        orgName: formName.trim(),
+        contactEmail: formEmail.trim(),
+        theme: formTheme
+      });
+      savedThemeRef.current = formTheme;
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      setSaveError(err?.message || 'Failed to save organization settings');
+    } finally {
+      setIsSavingGeneral(false);
+    }
+  };
 
   // Member Management State
   const [editingMember, setEditingMember] = useState<User | null>(null);
@@ -213,63 +282,133 @@ export const Settings: React.FC = () => {
 
       <div className="transition-all duration-300">
         {activeTab === 'general' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
-            <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] border-[3px] border-slate-100 dark:border-slate-800 space-y-8 shadow-sm">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                  <span className="material-symbols-outlined font-black">corporate_fare</span>
+          <div className="space-y-8 animate-fade-in">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] border-[3px] border-slate-100 dark:border-slate-800 space-y-8 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                    <span className="material-symbols-outlined font-black">corporate_fare</span>
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white">Organization Profile</h3>
                 </div>
-                <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white">Organization Profile</h3>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Organization Name</label>
+                    <input
+                      type="text"
+                      value={formName}
+                      onChange={e => setFormName(e.target.value)}
+                      disabled={!isOrgAdmin}
+                      className="w-full px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner disabled:text-slate-400 disabled:cursor-not-allowed"
+                    />
+                    {isOrgAdmin && nameError && formName !== orgSettings.orgName && (
+                      <p className="text-[10px] font-black uppercase tracking-widest text-red-500 ml-2">{nameError}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Contact Email</label>
+                    <input
+                      type="email"
+                      value={formEmail}
+                      onChange={e => setFormEmail(e.target.value)}
+                      disabled={!isOrgAdmin}
+                      className="w-full px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner disabled:text-slate-400 disabled:cursor-not-allowed"
+                    />
+                    {isOrgAdmin && emailError && formEmail !== orgSettings.contactEmail && (
+                      <p className="text-[10px] font-black uppercase tracking-widest text-red-500 ml-2">{emailError}</p>
+                    )}
+                  </div>
+                  {!isOrgAdmin && (
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">lock</span>
+                      Only administrators can modify these settings
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Organization Name</label>
-                  <input
-                    type="text"
-                    value={orgName}
-                    onChange={e => setOrgName(e.target.value)}
-                    className="w-full px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner"
-                  />
+
+              <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] border-[3px] border-slate-100 dark:border-slate-800 space-y-8 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                    <span className="material-symbols-outlined font-black">palette</span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white">Workspace Theme</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Applies to the entire app for everyone</p>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Contact Email</label>
-                  <input
-                    type="email"
-                    value="admin@assettrack.pro"
-                    readOnly
-                    className="w-full px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-inner"
-                  />
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {THEMES.map(theme => {
+                    const selected = formTheme === theme.id;
+                    return (
+                      <button
+                        key={theme.id}
+                        onClick={() => handleThemePreview(theme.id)}
+                        disabled={!isOrgAdmin}
+                        title={theme.description}
+                        className={`relative p-4 rounded-3xl border-[3px] transition-all text-left disabled:cursor-not-allowed ${selected
+                          ? 'border-slate-900 dark:border-white shadow-xl scale-[1.03]'
+                          : 'border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 hover:scale-[1.02]'}`}
+                      >
+                        <div className="flex gap-1.5 mb-3">
+                          <span className="w-6 h-6 rounded-full shadow-inner" style={{ backgroundColor: theme.palette['400'] }}></span>
+                          <span className="w-6 h-6 rounded-full shadow-inner" style={{ backgroundColor: theme.palette['600'] }}></span>
+                          <span className="w-6 h-6 rounded-full shadow-inner" style={{ backgroundColor: theme.palette['800'] }}></span>
+                        </div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white">{theme.name}</p>
+                        {selected && (
+                          <span className="absolute top-3 right-3 material-symbols-outlined text-sm font-black text-slate-900 dark:text-white">check_circle</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 p-10 rounded-[3rem] border-[3px] border-slate-100 dark:border-slate-800 space-y-8 shadow-sm">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                  <span className="material-symbols-outlined font-black">palette</span>
+            {isOrgAdmin && (
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border-[3px] border-slate-100 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row items-center gap-4 sm:justify-between">
+                <div className="flex items-center gap-3 min-h-[1.5rem]">
+                  {saveError && (
+                    <p className="text-[10px] font-black uppercase tracking-widest text-red-500 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      {saveError}
+                    </p>
+                  )}
+                  {saveSuccess && !saveError && (
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">check_circle</span>
+                      Settings saved — theme is now live for everyone
+                    </p>
+                  )}
+                  {!saveError && !saveSuccess && isDirty && (
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">edit_note</span>
+                      Unsaved changes
+                    </p>
+                  )}
                 </div>
-                <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white">Corporate Identity</h3>
-              </div>
-              <div className="space-y-8">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Brand Primary Color</label>
-                  <div className="flex gap-4">
-                    <input
-                      type="color"
-                      value={orgColor}
-                      onChange={e => setOrgColor(e.target.value)}
-                      className="w-14 h-14 rounded-2xl cursor-pointer border-none bg-transparent"
-                    />
-                    <input
-                      type="text"
-                      value={orgColor.toUpperCase()}
-                      onChange={e => setOrgColor(e.target.value)}
-                      className="flex-1 px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-mono font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner"
-                    />
-                  </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleDiscardGeneral}
+                    disabled={!isDirty || isSavingGeneral}
+                    className="px-8 py-4 rounded-full border-2 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-black text-xs uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-40"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    onClick={handleSaveGeneral}
+                    disabled={!isDirty || !formValid || isSavingGeneral}
+                    className="px-10 py-4 bg-blue-600 text-white rounded-full font-black text-xs uppercase tracking-widest hover:bg-blue-500 shadow-xl shadow-blue-500/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isSavingGeneral
+                      ? <span className="material-symbols-outlined text-sm font-black animate-spin">sync</span>
+                      : <span className="material-symbols-outlined text-sm font-black">save</span>}
+                    {isSavingGeneral ? 'Saving...' : 'Save Changes'}
+                  </button>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
