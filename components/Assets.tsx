@@ -469,8 +469,16 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         });
 
         if (res.ok) {
-          const newAssets = await res.json();
-          setAssets(prev => [...newAssets, ...prev]);
+          const importedAssets: Asset[] = await res.json();
+          // Import may update existing assets (upsert) — replace those in place,
+          // prepend only the genuinely new ones
+          setAssets(prev => {
+            const importedById = new Map(importedAssets.map(a => [a.id, a]));
+            const existingIds = new Set(prev.map(a => a.id));
+            const merged = prev.map(a => importedById.get(a.id) ?? a);
+            const brandNew = importedAssets.filter(a => !existingIds.has(a.id));
+            return [...brandNew, ...merged];
+          });
           setImportProgress(100);
           setTimeout(() => {
             setIsImporting(false);
