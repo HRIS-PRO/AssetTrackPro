@@ -385,37 +385,74 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   const [isImportingBusy, setIsImportingBusy] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
 
+  // RFC-4180-style CSV parser: handles quoted fields, commas/newlines inside
+  // quotes, escaped quotes (""), CRLF line endings and Excel's UTF-8 BOM.
+  const parseCsvRows = (text: string): string[][] => {
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let field = '';
+    let inQuotes = false;
+    const src = text.replace(/^\uFEFF/, '');
+
+    for (let i = 0; i < src.length; i++) {
+      const ch = src[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (src[i + 1] === '"') { field += '"'; i++; }
+          else inQuotes = false;
+        } else {
+          field += ch;
+        }
+      } else if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        row.push(field); field = '';
+      } else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && src[i + 1] === '\n') i++;
+        row.push(field); field = '';
+        if (row.some(v => v.trim() !== '')) rows.push(row);
+        row = [];
+      } else {
+        field += ch;
+      }
+    }
+    row.push(field);
+    if (row.some(v => v.trim() !== '')) rows.push(row);
+    return rows;
+  };
+
   const processImport = async (file: File) => {
     setIsImportingBusy(true);
     setImportProgress(10);
-    
+
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
         const text = e.target?.result as string;
-        const lines = text.split('\n').filter(l => l.trim().length > 0);
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-        
-        const data = lines.slice(1).map(line => {
-          const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const rows = parseCsvRows(text);
+        if (rows.length < 2) throw new Error('CSV has no data rows');
+
+        // Normalize headers to letters only: "Serial Number", serial_no, S/N → serialnumber/serialno/sn
+        const headers = rows[0].map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ''));
+
+        const data = rows.slice(1).map(values => {
           const entry: any = {};
-          headers.forEach((header, i) => {
-            // Map common CSV headers to our internal field names
-            const h = header.replace(/\s+/g, '');
-            if (h === 'name' || h === 'assetname') entry.name = values[i];
-            else if (h === 'category') entry.category = values[i];
-            else if (h === 'serial' || h === 'serialnumber') entry.serialNumber = values[i];
+          headers.forEach((h, i) => {
+            const val = (values[i] ?? '').trim();
+            if (h === 'name' || h === 'assetname') entry.name = val;
+            else if (h === 'category') entry.category = val;
+            else if (h === 'serial' || h === 'serialnumber' || h === 'serialno' || h === 'sn') entry.serialNumber = val;
             else if (h === 'price' || h === 'purchaseprice') {
-              const p = values[i].replace(/,/g, '');
+              const p = val.replace(/[^0-9.-]/g, '');
               entry.purchasePrice = isNaN(parseFloat(p)) ? 0 : parseFloat(p);
             }
-            else if (h === 'date' || h === 'purchasedate') entry.purchaseDate = values[i];
-            else if (h === 'condition') entry.condition = values[i];
-            else if (h === 'location') entry.location = values[i];
-            else if (h === 'department') entry.department = values[i];
-            else if (h === 'manager') entry.manager = values[i];
-            else if (h === 'assignedto' || h === 'user' || h === 'owner') entry.assignedTo = values[i];
-            else if (h === 'description') entry.description = values[i];
+            else if (h === 'date' || h === 'purchasedate') entry.purchaseDate = val;
+            else if (h === 'condition') entry.condition = val;
+            else if (h === 'location') entry.location = val;
+            else if (h === 'department') entry.department = val;
+            else if (h === 'manager') entry.manager = val;
+            else if (h === 'assignedto' || h === 'user' || h === 'owner') entry.assignedTo = val;
+            else if (h === 'description') entry.description = val;
           });
           return entry;
         });
