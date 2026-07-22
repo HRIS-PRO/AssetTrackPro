@@ -174,11 +174,11 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   const handleExportInventory = () => {
     setIsExporting(true);
     setTimeout(() => {
-      const headers = ['Asset ID', 'Name', 'Category', 'User', 'Department', 'Status', 'Purchase Price', 'Purchase Date', 'Condition', 'Location'];
+      const headers = ['Asset ID', 'Name', 'Serial Number', 'Category', 'User', 'Department', 'Status', 'Purchase Price', 'Purchase Date', 'Condition', 'Location'];
       const rows = filteredAssets.map(a => {
         const assignedUser = team.find(u => u.id === a.assignedTo)?.name || 'Unassigned';
         return [
-          a.id, a.name, a.category, assignedUser, a.department, a.status, a.purchasePrice, a.purchaseDate, a.condition, a.location
+          a.id, a.name, a.serialNumber || '', a.category, assignedUser, a.department, a.status, a.purchasePrice, a.purchaseDate, a.condition, a.location
         ];
       });
 

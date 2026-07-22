@@ -62,6 +62,7 @@ export const Reports: React.FC = () => {
   const columns = [
     { key: 'id', label: 'ID' },
     { key: 'name', label: 'Asset Name' },
+    { key: 'serialNumber', label: 'Serial Number' },
     { key: 'department', label: 'Department' },
     { key: 'category', label: 'Category' },
     { key: 'purchasePrice', label: 'Price' },
@@ -185,10 +186,10 @@ export const Reports: React.FC = () => {
             onClick={() => { 
               setIsExporting(true); 
               try {
-                const headers = ['ID', 'Asset Name', 'Category', 'Department', 'Status', 'Purchase Date', 'Purchase Price (₦)'];
+                const headers = ['ID', 'Asset Name', 'Serial Number', 'Category', 'Department', 'Status', 'Purchase Date', 'Purchase Price (₦)'];
                 const csvRows = [headers.join(',')];
                 filteredData.forEach(asset => {
-                  const values = [asset.id, asset.name, asset.category, asset.department, asset.status, asset.purchaseDate, asset.purchasePrice];
+                  const values = [asset.id, asset.name, asset.serialNumber || '', asset.category, asset.department, asset.status, asset.purchaseDate, asset.purchasePrice];
                   csvRows.push(values.join(','));
                 });
                 const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
