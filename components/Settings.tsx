@@ -31,6 +31,10 @@ export const Settings: React.FC = () => {
   const [formName, setFormName] = useState(orgSettings.orgName);
   const [formEmail, setFormEmail] = useState(orgSettings.contactEmail);
   const [formTheme, setFormTheme] = useState(orgSettings.theme);
+  const [formLogo, setFormLogo] = useState<string | null>(orgSettings.logoUrl || null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -43,6 +47,7 @@ export const Settings: React.FC = () => {
     setFormName(orgSettings.orgName);
     setFormEmail(orgSettings.contactEmail);
     setFormTheme(orgSettings.theme);
+    setFormLogo(orgSettings.logoUrl || null);
     savedThemeRef.current = orgSettings.theme;
   }, [orgSettings]);
 
@@ -54,7 +59,8 @@ export const Settings: React.FC = () => {
   const isDirty =
     formName !== orgSettings.orgName ||
     formEmail !== orgSettings.contactEmail ||
-    formTheme !== orgSettings.theme;
+    formTheme !== orgSettings.theme ||
+    formLogo !== (orgSettings.logoUrl || null);
 
   const nameError = formName.trim().length < 2 ? 'Organization name must be at least 2 characters' : null;
   const emailError = !EMAIL_REGEX.test(formEmail.trim()) ? 'Enter a valid contact email' : null;
@@ -66,11 +72,71 @@ export const Settings: React.FC = () => {
     applyTheme(themeId, false); // live preview without persisting
   };
 
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoError("Logo image size must be less than 2MB");
+      return;
+    }
+
+    setLogoError(null);
+    setIsUploadingLogo(true);
+
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/org-settings/logo', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+
+      if (!res.ok) {
+        let message = 'Failed to upload logo';
+        try {
+          const body = await res.json();
+          if (body?.message) message = body.message;
+        } catch { /* non-JSON error body */ }
+        throw new Error(message);
+      }
+
+      const data = await res.json();
+      setFormLogo(data.logoUrl);
+      await saveOrgSettings({ logoUrl: data.logoUrl });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      console.error("Logo upload failed", err);
+      setLogoError(err.message || 'Failed to upload logo. Please try again.');
+    } finally {
+      setIsUploadingLogo(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    setFormLogo(null);
+    setLogoError(null);
+    try {
+      await saveOrgSettings({ logoUrl: null });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error("Failed to remove logo", err);
+    }
+  };
+
   const handleDiscardGeneral = () => {
     setFormName(orgSettings.orgName);
     setFormEmail(orgSettings.contactEmail);
     setFormTheme(orgSettings.theme);
+    setFormLogo(orgSettings.logoUrl || null);
     setSaveError(null);
+    setLogoError(null);
     applyTheme(orgSettings.theme);
   };
 
@@ -82,7 +148,8 @@ export const Settings: React.FC = () => {
       await saveOrgSettings({
         orgName: formName.trim(),
         contactEmail: formEmail.trim(),
-        theme: formTheme
+        theme: formTheme,
+        logoUrl: formLogo
       });
       savedThemeRef.current = formTheme;
       setSaveSuccess(true);
@@ -362,6 +429,67 @@ export const Settings: React.FC = () => {
                       </button>
                     );
                   })}
+                </div>
+
+                {/* App Branding Logo Section */}
+                <div className="pt-8 border-t border-slate-100 dark:border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-900 dark:text-white">App Branding Logo</h4>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Displayed on navigation header & sidebar</p>
+                    </div>
+                    {formLogo && isOrgAdmin && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        className="text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-600 transition-colors"
+                      >
+                        Reset Logo
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-6 p-4 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                    {formLogo ? (
+                      <img
+                        src={formLogo}
+                        alt="Custom App Logo"
+                        className="w-16 h-16 rounded-2xl object-cover shadow-md border border-slate-200 dark:border-slate-700 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white shrink-0 shadow-md">
+                        <span className="material-symbols-outlined font-black text-3xl">inventory_2</span>
+                      </div>
+                    )}
+
+                    <div className="flex-1 space-y-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                        onChange={handleLogoChange}
+                        className="hidden"
+                        disabled={!isOrgAdmin || isUploadingLogo}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={!isOrgAdmin || isUploadingLogo}
+                          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-xs font-black uppercase tracking-widest shadow-md transition-all disabled:opacity-50 flex items-center gap-2"
+                        >
+                          <span className="material-symbols-outlined text-sm">upload</span>
+                          {isUploadingLogo ? 'Uploading...' : formLogo ? 'Change Logo' : 'Upload App Logo'}
+                        </button>
+                      </div>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                        PNG, JPG, SVG, WebP • Max size 2MB
+                      </p>
+                      {logoError && (
+                        <p className="text-[10px] font-black uppercase tracking-widest text-red-500">{logoError}</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

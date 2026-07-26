@@ -3,6 +3,7 @@ import React, { useState, useRef } from 'react';
 import { User, UserRole } from '../types';
 import { MOCK_USERS } from '../constants';
 import { ToastProvider, useToast } from './Toast';
+import { useAssetTracker } from '../AssetTrackerContext';
 
 interface AuthProps {
   onLogin: (user: User) => void;
@@ -11,6 +12,7 @@ interface AuthProps {
 
 export const Auth: React.FC<AuthProps> = ({ onLogin, isDarkMode }) => {
   const { addToast } = useToast();
+  const { orgSettings } = useAssetTracker();
   const [view, setView] = useState<'signin' | 'otp' | 'forgot-password'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -162,10 +164,18 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, isDarkMode }) => {
       <div className="w-full max-w-xl bg-white/90 dark:bg-[#0f172a]/80 backdrop-blur-2xl p-12 md:p-16 rounded-[4rem] relative z-10 overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800 animate-fade-in">
 
         <div className="flex flex-col items-center text-center mb-16 animate-in fade-in zoom-in-95 duration-500">
-          {/* HERO LOGO: Icon Container (The Glass Shield) */}
-          <div className="w-16 h-16 bg-blue-600/10 dark:bg-white/10 backdrop-blur-xl border border-blue-600/20 dark:border-white/20 rounded-[1.25rem] flex items-center justify-center text-blue-600 dark:text-white mb-8 shadow-2xl shadow-blue-500/10 dark:shadow-black/50">
-            <span className="material-symbols-outlined !text-[36px] fill-current" style={{ fontVariationSettings: "'FILL' 1" }}>inventory_2</span>
-          </div>
+          {/* HERO LOGO: Icon / Image Container */}
+          {orgSettings?.logoUrl ? (
+            <img
+              src={orgSettings.logoUrl}
+              alt="App Logo"
+              className="w-20 h-20 rounded-2xl object-cover mb-8 shadow-2xl shadow-blue-500/20 border border-slate-200 dark:border-slate-800"
+            />
+          ) : (
+            <div className="w-16 h-16 bg-blue-600/10 dark:bg-white/10 backdrop-blur-xl border border-blue-600/20 dark:border-white/20 rounded-[1.25rem] flex items-center justify-center text-blue-600 dark:text-white mb-8 shadow-2xl shadow-blue-500/10 dark:shadow-black/50">
+              <span className="material-symbols-outlined !text-[36px] fill-current" style={{ fontVariationSettings: "'FILL' 1" }}>inventory_2</span>
+            </div>
+          )}
 
           {/* HERO LOGO: Wordmark Logic */}
           <h1 className="text-[32px] font-black italic text-slate-900 dark:text-white tracking-tighter mb-8 uppercase drop-shadow-sm">

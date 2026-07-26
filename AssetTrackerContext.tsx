@@ -7,6 +7,7 @@ export interface OrgSettings {
   orgName: string;
   contactEmail: string;
   theme: string;
+  logoUrl?: string | null;
   updatedAt?: string;
 }
 
@@ -14,6 +15,7 @@ const DEFAULT_ORG_SETTINGS: OrgSettings = {
   orgName: 'AssetTrackPro Enterprise',
   contactEmail: 'admin@assettrack.pro',
   theme: DEFAULT_THEME_ID,
+  logoUrl: null,
 };
 
 interface AssetTrackerContextType {

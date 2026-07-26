@@ -61,10 +61,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           aria-label="AssetTrackPro Home"
           className={`h-24 px-6 flex items-center transition-all ${!isOpen ? 'justify-center' : 'gap-4'} group cursor-pointer shrink-0`}
         >
-          {/* Icon Container */}
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-all duration-300">
-            <span className="material-symbols-outlined font-black !text-[26px] fill-current" style={{ fontVariationSettings: "'FILL' 1" }}>inventory_2</span>
-          </div>
+          {/* Icon / Image Container */}
+          {orgSettings.logoUrl ? (
+            <img
+              src={orgSettings.logoUrl}
+              alt="App Logo"
+              className="w-12 h-12 rounded-2xl object-cover shrink-0 shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-all duration-300 border border-slate-200/50 dark:border-slate-800"
+            />
+          ) : (
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-all duration-300">
+              <span className="material-symbols-outlined font-black !text-[26px] fill-current" style={{ fontVariationSettings: "'FILL' 1" }}>inventory_2</span>
+            </div>
+          )}
 
           {/* Wordmark Logic: Hidden when sidebar is minimized */}
           {isOpen && (

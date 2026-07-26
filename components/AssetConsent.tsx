@@ -11,56 +11,72 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
   const { assets, refreshAll, orgSettings } = useAssetTracker();
   const { assetId } = useParams<{ assetId: string }>();
   const navigate = useNavigate();
-  const [isConfirmed, setIsConfirmed] = useState(false);
   const [hasSigned, setHasSigned] = useState(false);
+  const [signatureMode, setSignatureMode] = useState<'draw' | 'upload'>('draw');
+  const [uploadedSignaturePng, setUploadedSignaturePng] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sigFileInputRef = useRef<HTMLInputElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const asset = assets.find(a => a.id === assetId) || assets[0];
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#000000';
+    if (signatureMode === 'draw') {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
+          ctx.lineWidth = 2.5;
+          ctx.strokeStyle = '#0f172a';
+        }
       }
     }
-  }, []);
+  }, [signatureMode]);
 
   if (!asset) return null;
 
+  const getCanvasPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = ('touches' in e) ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = ('touches' in e) ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  };
+
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    if ('touches' in e) e.preventDefault();
     setIsDrawing(true);
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
+    const { x, y } = getCanvasPos(e, canvas);
     ctx.beginPath();
     ctx.moveTo(x, y);
     setHasSigned(true);
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    if ('touches' in e) e.preventDefault();
     if (!isDrawing) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
+    const { x, y } = getCanvasPos(e, canvas);
     ctx.lineTo(x, y);
     ctx.stroke();
   };
@@ -68,14 +84,99 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
   const stopDrawing = () => setIsDrawing(false);
 
   const clearSignature = () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        setHasSigned(false);
+    if (signatureMode === 'draw') {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
       }
+    } else {
+      setUploadedSignaturePng(null);
+      if (sigFileInputRef.current) sigFileInputRef.current.value = '';
     }
+    setHasSigned(false);
+    setUploadError(null);
+  };
+
+  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError(null);
+
+    // Validate size: must be less than 1MB (1024 * 1024 bytes)
+    const MAX_SIZE_BYTES = 1024 * 1024;
+    if (file.size > MAX_SIZE_BYTES) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+      setUploadError(`File size exceeds the 1MB limit (Current: ${sizeMb}MB). Please upload a smaller signature image.`);
+      return;
+    }
+
+    // Validate image format
+    if (!file.type.startsWith('image/')) {
+      setUploadError("Invalid file type. Please upload a valid PNG or JPG image.");
+      return;
+    }
+
+    setIsConverting(true);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Create an offscreen canvas to transform any image (JPG/JPEG/PNG) into a standardized PNG.
+        // Cap pixel dimensions before re-encoding — PNG is lossless, so a large photo (e.g. a
+        // phone-camera shot of a signature) can balloon well past the original file size otherwise.
+        const MAX_DIMENSION = 1000;
+        let targetWidth = img.naturalWidth || 800;
+        let targetHeight = img.naturalHeight || 400;
+        if (targetWidth > MAX_DIMENSION || targetHeight > MAX_DIMENSION) {
+          const scale = Math.min(MAX_DIMENSION / targetWidth, MAX_DIMENSION / targetHeight);
+          targetWidth = Math.round(targetWidth * scale);
+          targetHeight = Math.round(targetHeight * scale);
+        }
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = targetWidth;
+        tempCanvas.height = targetHeight;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        if (tempCtx) {
+          tempCtx.drawImage(img, 0, 0, targetWidth, targetHeight);
+          const pngDataUrl = tempCanvas.toDataURL('image/png');
+
+          // Verify the actual converted output still meets the promised limit —
+          // the earlier size check only covers the original (pre-conversion) file.
+          const base64Length = pngDataUrl.split(',')[1]?.length || 0;
+          const approxBytes = Math.ceil((base64Length * 3) / 4);
+          if (approxBytes > MAX_SIZE_BYTES) {
+            setUploadError(`Converted PNG is ${(approxBytes / (1024 * 1024)).toFixed(2)}MB, which exceeds the 1MB limit. Please upload a smaller or simpler signature image.`);
+          } else {
+            setUploadedSignaturePng(pngDataUrl);
+            setHasSigned(true);
+          }
+        } else {
+          setUploadError("Failed to process image transformation.");
+        }
+        setIsConverting(false);
+      };
+
+      img.onerror = () => {
+        setUploadError("Could not load signature image. Ensure it is a valid image file.");
+        setIsConverting(false);
+      };
+
+      img.src = event.target?.result as string;
+    };
+
+    reader.onerror = () => {
+      setUploadError("Error reading signature file.");
+      setIsConverting(false);
+    };
+
+    reader.readAsDataURL(file);
   };
 
   const handleCopySN = () => {
@@ -86,10 +187,12 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
 
   const handleConfirmAsset = async () => {
     setIsSubmitting(true);
-    
+
     let signatureData = null;
-    if (canvasRef.current && hasSigned) {
+    if (signatureMode === 'draw' && canvasRef.current && hasSigned) {
       signatureData = canvasRef.current.toDataURL('image/png');
+    } else if (signatureMode === 'upload' && uploadedSignaturePng) {
+      signatureData = uploadedSignaturePng;
     }
 
     try {
@@ -103,7 +206,7 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
         body: JSON.stringify({ consentSignature: signatureData })
       });
       if (!res.ok) throw new Error('Failed to accept asset');
-      await refreshAll?.(); 
+      await refreshAll?.();
       navigate(`/consent/${asset.id}/document`);
     } catch (err) {
       console.error(err);
@@ -223,30 +326,117 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
               </p>
            </div>
 
-           <div className="space-y-4 pt-4">
-              <div className="flex justify-between items-end">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Draw Digital Signature</p>
-                <button onClick={clearSignature} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline underline-offset-4">Clear Canvas</button>
+           <div className="space-y-6 pt-4 border-t border-slate-200/50 dark:border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-widest dark:text-white">Digital Signature</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Required format: PNG or JPG (auto-converted to PNG) • Max size: 1MB</p>
+                </div>
+
+                <div className="flex items-center gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/80 rounded-2xl">
+                  <button
+                    type="button"
+                    onClick={() => { setSignatureMode('draw'); setUploadError(null); }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${signatureMode === 'draw' ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-md' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'}`}
+                  >
+                    <span className="material-symbols-outlined text-sm">draw</span>
+                    Draw
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSignatureMode('upload'); setUploadError(null); }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${signatureMode === 'upload' ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-md' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'}`}
+                  >
+                    <span className="material-symbols-outlined text-sm">upload_file</span>
+                    Upload Image
+                  </button>
+                </div>
               </div>
-              <div className="relative group">
-                <canvas 
-                  ref={canvasRef}
-                  width={800}
-                  height={150}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onTouchStart={startDrawing}
-                  onTouchMove={draw}
-                  onTouchEnd={stopDrawing}
-                  className="w-full h-40 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-2xl cursor-crosshair shadow-inner"
-                />
-                {!hasSigned && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-                    <p className="text-2xl font-black uppercase tracking-[0.5em] text-slate-300">Sign Here</p>
+
+              {uploadError && (
+                <div className="p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs font-black flex items-center gap-2 animate-fade-in">
+                  <span className="material-symbols-outlined text-base">error</span>
+                  {uploadError}
+                </div>
+              )}
+
+              {signatureMode === 'draw' ? (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Draw your signature in the box below</span>
+                    {hasSigned && (
+                      <button onClick={clearSignature} type="button" className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest hover:underline underline-offset-4 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-xs">clear</span>
+                        Clear Canvas
+                      </button>
+                    )}
                   </div>
-                )}
-              </div>
+                  <div className="relative group">
+                    <canvas
+                      ref={canvasRef}
+                      width={800}
+                      height={180}
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onTouchStart={startDrawing}
+                      onTouchMove={draw}
+                      onTouchEnd={stopDrawing}
+                      className="w-full h-44 touch-none bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-2xl cursor-crosshair shadow-inner"
+                    />
+                    {!hasSigned && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-25">
+                        <p className="text-2xl font-black uppercase tracking-[0.4em] text-slate-400">Sign Here</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <input
+                    ref={sigFileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg"
+                    onChange={handleSignatureUpload}
+                    className="hidden"
+                  />
+
+                  {uploadedSignaturePng ? (
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                          <span className="material-symbols-outlined text-sm">check_circle</span>
+                          Signature Uploaded & Transformed (PNG format)
+                        </span>
+                        <button onClick={clearSignature} type="button" className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline flex items-center gap-1">
+                          <span className="material-symbols-outlined text-xs">delete</span>
+                          Remove Signature
+                        </button>
+                      </div>
+                      <div className="p-4 bg-white dark:bg-slate-900 border-2 border-emerald-500/50 rounded-2xl shadow-inner flex items-center justify-center max-h-44 overflow-hidden">
+                        <img src={uploadedSignaturePng} alt="Uploaded Signature" className="max-h-36 object-contain" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => sigFileInputRef.current?.click()}
+                      className="w-full h-44 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-400 bg-white/80 dark:bg-slate-900/80 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all hover:scale-[1.01] group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <span className="material-symbols-outlined text-2xl">file_upload</span>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">
+                          {isConverting ? 'Transforming image to PNG...' : 'Click to Upload Signature File'}
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                          PNG or JPG format • Under 1MB
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
            </div>
         </div>
 
