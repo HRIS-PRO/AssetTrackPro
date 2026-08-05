@@ -27,6 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = [
     { label: 'Dashboard', path: '/', icon: 'dashboard', roles: [UserRole.USER, UserRole.AUDITOR, UserRole.ADMIN_USER, UserRole.SUPER_ADMIN] },
     { label: 'Assets', path: '/assets', icon: 'inventory_2', roles: [UserRole.USER, UserRole.AUDITOR, UserRole.ADMIN_USER, UserRole.SUPER_ADMIN] },
+    { label: 'Consent', path: '/consent-management', icon: 'verified_user', roles: [UserRole.SUPER_ADMIN] },
     { label: 'Requests', path: '/requests', icon: 'shopping_cart', roles: [UserRole.USER, UserRole.AUDITOR, UserRole.ADMIN_USER, UserRole.SUPER_ADMIN] },
     { label: 'Audits', path: '/audits', icon: 'fact_check', roles: [UserRole.AUDITOR, UserRole.ADMIN_USER, UserRole.SUPER_ADMIN] },
     { label: 'Reports', path: '/reports', icon: 'bar_chart', roles: [UserRole.AUDITOR, UserRole.SUPER_ADMIN] },

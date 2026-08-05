@@ -1,8 +1,8 @@
-
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, UserRole, Asset, Activity, AssetStatus, EquipmentRequest, AssetReport } from '../types';
 import { AuditLog } from './AuditLog';
+import { useAssetTracker } from '../AssetTrackerContext';
 
 interface DashboardProps {
   user: User;
@@ -20,8 +20,12 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({
   user, assets: initialAssets, isDarkMode, activities, onRequestAsset, onReportProblem, requests, managedRequests, allReports, managedReports
 }) => {
+  const { pendingByodUserIds } = useAssetTracker();
   const [assets, setAssets] = React.useState<Asset[]>(initialAssets);
   const [activeAudit, setActiveAudit] = React.useState<any>(null);
+
+  // Check if current user has a pending BYOD consent request
+  const hasPendingByod = !!pendingByodUserIds[user.id] || !!pendingByodUserIds['ALL'];
 
   // Sync state if props change
   React.useEffect(() => {
@@ -51,30 +55,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const isSuperAdmin = user.role === UserRole.SUPER_ADMIN;
   const navigate = useNavigate();
-  const [isAccepting, setIsAccepting] = React.useState<string | null>(null);
-
-  const handleAcceptAsset = async (assetId: string) => {
-    if (isAccepting) return;
-    setIsAccepting(assetId);
-    try {
-      const token = localStorage.getItem('asset_track_token');
-      const res = await fetch(`/api/assets/${assetId}/accept`, {
-        method: 'PUT',
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      if (res.ok) {
-        setAssets(prev => prev.map(a => a.id === assetId ? { ...a, status: AssetStatus.ACTIVE } : a));
-      } else {
-        const error = await res.json().catch(() => ({}));
-        alert(`Failed to accept asset: ${error.message || 'Unknown error'}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Network error while accepting asset.');
-    } finally {
-      setIsAccepting(null);
-    }
-  };
 
   const stats = useMemo(() => {
     const myAssets = assets.filter(a => a.assignedTo === user.id);
@@ -82,6 +62,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const price = typeof curr.purchasePrice === 'string' ? parseFloat(curr.purchasePrice.replace(/,/g, '')) : curr.purchasePrice;
       return acc + (isNaN(price as number) ? 0 : (price as number));
     }, 0);
+
+    const pendingAssetsCount = assets.filter(a => a.assignedTo === user.id && a.status === AssetStatus.PENDING).length;
+    const totalPendingConsentsCount = pendingAssetsCount + (hasPendingByod ? 1 : 0);
 
     const baseStats: Array<{
       label: string;
@@ -102,12 +85,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
         },
         {
           label: 'Pending Consents',
-          value: assets.filter(a => a.assignedTo === user.id && a.status === AssetStatus.PENDING).length,
+          value: totalPendingConsentsCount,
           icon: 'signature',
           color: 'amber',
           subText: isSuperAdmin ? 'global queue' : 'action required',
           largeIcon: 'gavel',
-          badge: assets.filter(a => a.assignedTo === user.id && a.status === AssetStatus.PENDING).length > 0 ? 'Action Required' : undefined
+          badge: totalPendingConsentsCount > 0 ? 'Action Required' : undefined
         },
         {
           label: isSuperAdmin ? 'Pending Requests' : 'Active Requests',
@@ -131,7 +114,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
 
     return baseStats;
-  }, [assets, user.id, isSuperAdmin, managedRequests, requests]);
+  }, [assets, user.id, isSuperAdmin, managedRequests, requests, hasPendingByod]);
+
+  const pendingAssetAssignments = useMemo(() => {
+    return assets.filter(a => a.assignedTo === user.id && a.status === AssetStatus.PENDING);
+  }, [assets, user.id]);
 
   return (
     <div className="space-y-8 pb-12 animate-fade-in">
@@ -171,16 +158,45 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         {/* Side Column: Audit & Actions */}
         <div className="space-y-8 overflow-y-auto scrollbar-hide">
-          {assets.filter(a => a.assignedTo === user.id && a.status === AssetStatus.PENDING).length > 0 && (
+          {/* Pending Sign-offs Section: BYOD Policy & Asset Custody */}
+          {(hasPendingByod || pendingAssetAssignments.length > 0) && (
             <div className="bg-amber-50 dark:bg-amber-900/10 rounded-[2.5rem] border border-amber-200 dark:border-amber-800/30 p-8 shadow-sm space-y-6">
               <div className="flex items-center gap-3 mb-2">
                 <span className="material-symbols-outlined text-amber-600">assignment_late</span>
-                <h3 className="text-sm font-black text-amber-900 dark:text-amber-500 uppercase tracking-widest">Pending Assignments</h3>
+                <h3 className="text-sm font-black text-amber-900 dark:text-amber-500 uppercase tracking-widest">Pending Sign-offs</h3>
               </div>
+
               <div className="space-y-4">
-                {assets.filter(a => a.assignedTo === user.id && a.status === AssetStatus.PENDING).map(asset => (
-                  <div key={asset.id} className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-amber-100 dark:border-amber-900/20">
-                    <div className="flex justify-between items-start mb-3">
+                {/* 1. BYOD Policy Sign-off Card */}
+                {hasPendingByod && (
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-indigo-200 dark:border-indigo-900/40 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center">
+                          <span className="material-symbols-outlined text-lg">devices</span>
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm text-slate-900 dark:text-white">BYOD Policy Consent</p>
+                          <p className="text-[10px] font-bold text-slate-500">Personal Hardware Registration</p>
+                        </div>
+                      </div>
+                      <span className="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[9px] font-black uppercase rounded-lg">
+                        Required
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => navigate(`/consent/byod/${user.id}`)}
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs tracking-widest uppercase rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2"
+                    >
+                      Review BYOD Policy
+                    </button>
+                  </div>
+                )}
+
+                {/* 2. Asset Custody Sign-off Cards */}
+                {pendingAssetAssignments.map(asset => (
+                  <div key={asset.id} className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-amber-100 dark:border-amber-900/20 space-y-3">
+                    <div className="flex justify-between items-start">
                       <div>
                         <p className="font-bold text-sm text-slate-900 dark:text-white">{asset.name}</p>
                         <p className="text-xs font-bold text-slate-500">{asset.id}</p>

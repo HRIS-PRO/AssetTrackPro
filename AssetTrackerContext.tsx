@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Asset, Activity, EquipmentRequest, AssetReport, UserRole } from './types';
 import { applyTheme, DEFAULT_THEME_ID } from './themes';
@@ -9,6 +8,17 @@ export interface OrgSettings {
   theme: string;
   logoUrl?: string | null;
   updatedAt?: string;
+}
+
+export interface ByodSignedRecord {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  department: string;
+  selectedDevices: string[];
+  signatureData?: string | null;
+  signedAt: string;
 }
 
 const DEFAULT_ORG_SETTINGS: OrgSettings = {
@@ -47,6 +57,11 @@ interface AssetTrackerContextType {
   refreshAll: () => Promise<void>;
   orgSettings: OrgSettings;
   saveOrgSettings: (updates: Partial<OrgSettings>) => Promise<OrgSettings>;
+  pendingByodUserIds: Record<string, boolean>;
+  signedByodRecords: Record<string, ByodSignedRecord>;
+  triggerByodConsent: (targetOption: string) => void;
+  clearByodConsent: (userId?: string) => void;
+  executeByodConsent: (record: ByodSignedRecord) => void;
 }
 
 const AssetTrackerContext = createContext<AssetTrackerContextType | undefined>(undefined);
@@ -87,6 +102,69 @@ export const AssetTrackerProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [superAdmins, setSuperAdmins] = useState<{ id: string, email: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [orgSettings, setOrgSettings] = useState<OrgSettings>(DEFAULT_ORG_SETTINGS);
+
+  // Persistent pending BYOD consent requests state
+  const [pendingByodUserIds, setPendingByodUserIds] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('asset_track_pending_byod');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { return {}; }
+    }
+    return {};
+  });
+
+  // Persistent signed BYOD consent records
+  const [signedByodRecords, setSignedByodRecords] = useState<Record<string, ByodSignedRecord>>(() => {
+    const saved = localStorage.getItem('asset_track_signed_byod');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { return {}; }
+    }
+    return {};
+  });
+
+  const triggerByodConsent = useCallback((targetOption: string) => {
+    setPendingByodUserIds(prev => {
+      let next: Record<string, boolean>;
+      if (targetOption === 'ALL') {
+        next = { ...prev, ALL: true };
+        team.forEach(u => { next[u.id] = true; });
+        if (user) next[user.id] = true;
+      } else {
+        next = { ...prev, [targetOption]: true };
+      }
+      localStorage.setItem('asset_track_pending_byod', JSON.stringify(next));
+      return next;
+    });
+  }, [team, user]);
+
+  const clearByodConsent = useCallback((userId?: string) => {
+    setPendingByodUserIds(prev => {
+      const next = { ...prev };
+      if (userId) {
+        delete next[userId];
+      }
+      delete next.ALL;
+      if (user) {
+        delete next[user.id];
+      }
+      localStorage.setItem('asset_track_pending_byod', JSON.stringify(next));
+      return next;
+    });
+  }, [user]);
+
+  const executeByodConsent = useCallback((record: ByodSignedRecord) => {
+    setSignedByodRecords(prev => {
+      const next = { ...prev, [record.userId]: record };
+      localStorage.setItem('asset_track_signed_byod', JSON.stringify(next));
+      return next;
+    });
+    setPendingByodUserIds(prev => {
+      const next = { ...prev };
+      delete next[record.userId];
+      delete next.ALL;
+      localStorage.setItem('asset_track_pending_byod', JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   // Org settings are public (no auth) so branding/theme load before login
   useEffect(() => {
@@ -208,14 +286,14 @@ export const AssetTrackerProvider: React.FC<{ children: React.ReactNode }> = ({ 
     managedRequests, setManagedRequests, faultyReports, setFaultyReports,
     managedReports, setManagedReports, activities, setActivities,
     superAdmins, loading, refreshAll: fetchData,
-    orgSettings, saveOrgSettings
+    orgSettings, saveOrgSettings,
+    pendingByodUserIds, signedByodRecords, triggerByodConsent, clearByodConsent, executeByodConsent
   }), [
     user, setUser, assets, setAssets, team, setTeam, allEmployees, departments, setDepartments, categories, setCategories,
     assetLocations, setAssetLocations, requests, setRequests, managedRequests, setManagedRequests, faultyReports, setFaultyReports,
     managedReports, setManagedReports, activities, setActivities, superAdmins, loading, fetchData,
-    orgSettings, saveOrgSettings
+    orgSettings, saveOrgSettings, pendingByodUserIds, signedByodRecords, triggerByodConsent, clearByodConsent, executeByodConsent
   ]);
-
 
   return (
     <AssetTrackerContext.Provider value={contextValue}>

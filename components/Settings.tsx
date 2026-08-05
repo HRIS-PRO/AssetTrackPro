@@ -1,22 +1,26 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { User, UserRole } from '../types';
 import { InviteMemberModal } from './InviteMemberModal';
 import { EditMemberModal } from './EditMemberModal';
 import { useAssetTracker } from '../AssetTrackerContext';
 import { THEMES, applyTheme } from '../themes';
+import { useToast } from './Toast';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const Settings: React.FC = () => {
   const {
     user,
+    assets,
     team, setTeam,
     categories, setCategories,
     departments, setDepartments,
     assetLocations, setAssetLocations,
     orgSettings, saveOrgSettings
   } = useAssetTracker();
+  const { addToast } = useToast();
 
   const [activeTab, setActiveTab] = useState('general');
   const [newCat, setNewCat] = useState('');
@@ -164,8 +168,47 @@ export const Settings: React.FC = () => {
   // Member Management State
   const [editingMember, setEditingMember] = useState<User | null>(null);
   const [revokingMember, setRevokingMember] = useState<User | null>(null);
+  const [consentModalTarget, setConsentModalTarget] = useState<User | null>(null);
+  const [loadingOption, setLoadingOption] = useState<'byod' | 'asset' | 'both' | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+
+  const handleExecuteConsentRequest = async (type: 'byod' | 'asset' | 'both') => {
+    if (!consentModalTarget || loadingOption) return;
+    setLoadingOption(type);
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const memberId = consentModalTarget.id;
+
+      if (type === 'asset' || type === 'both') {
+        await fetch(`/api/assets/user/${memberId}/request-consent`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }).catch(err => console.error(err));
+      }
+
+      const typeLabel = type === 'byod' ? 'BYOD policy consent' : (type === 'asset' ? 'Asset custody consent' : 'BYOD & Asset custody consents');
+      
+      addToast({
+        title: 'Consent Request Dispatched',
+        message: `${typeLabel} request successfully sent to ${consentModalTarget.name}!`,
+        type: 'success'
+      });
+
+      setConsentModalTarget(null);
+    } catch (err) {
+      console.error('Failed to request consent', err);
+      addToast({
+        title: 'Error',
+        message: 'Failed to send consent request. Please try again.',
+        type: 'error'
+      });
+    } finally {
+      setLoadingOption(null);
+    }
+  };
 
   const superAdmins = team.filter(m => m.role === UserRole.SUPER_ADMIN || m.role === UserRole.ADMIN_USER);
 
@@ -645,60 +688,92 @@ export const Settings: React.FC = () => {
                   <tr className="bg-slate-50 dark:bg-slate-800/50">
                     <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Name & Role</th>
                     <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Department</th>
+                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Unsigned Assets</th>
                     <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Status</th>
                     <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {team.map((member) => (
-                    <tr key={member.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all group">
-                      <td className="px-8 py-6">
-                        <div className="flex items-center gap-4">
-                          <img src={member.avatar} className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-slate-700 group-hover:border-blue-500 transition-all" alt="" />
-                          <div>
-                            <p className="font-bold dark:text-white">{member.name}</p>
-                            <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">{member.role.replace('_', ' ')}</p>
+                  {team.map((member) => {
+                    const unsignedAssets = assets.filter(a => 
+                      (a.assignedTo === member.id || a.assignedTo === member.email || a.assignedTo === member.employeeId) && 
+                      (a.status === 'PENDING' || !a.consentSignature)
+                    );
+                    return (
+                      <tr key={member.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all group">
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-4">
+                            <img src={member.avatar} className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-slate-700 group-hover:border-blue-500 transition-all" alt="" />
+                            <div>
+                              <p className="font-bold dark:text-white">{member.name}</p>
+                              <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">{member.role.replace('_', ' ')}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-8 py-6">
-                        <span className="text-sm font-bold dark:text-slate-300">{member.department}</span>
-                      </td>
-                      <td className="px-8 py-6">
-                        <span className="px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400">Active</span>
-                      </td>
-                      <td className="px-8 py-6 text-right relative">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === member.id ? null : member.id); }}
-                          className="p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-400 dark:text-slate-500"
-                        >
-                          <span className="material-symbols-outlined">more_vert</span>
-                        </button>
-
-                        {openMenuId === member.id && (
-                          <div
-                            ref={menuRef}
-                            className="absolute right-8 top-16 w-48 glass-panel rounded-2xl shadow-2xl overflow-hidden z-[100] animate-fade-in border border-slate-200 dark:border-slate-800 text-left"
+                        </td>
+                        <td className="px-8 py-6">
+                          <span className="text-sm font-bold dark:text-slate-300">{member.department}</span>
+                        </td>
+                        <td className="px-8 py-6">
+                          {unsignedAssets.length > 0 ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 w-fit flex items-center gap-1.5 shadow-sm border border-amber-200 dark:border-amber-700/40">
+                                <span className="material-symbols-outlined text-[13px]">warning</span>
+                                {unsignedAssets.length} Unsigned {unsignedAssets.length === 1 ? 'Asset' : 'Assets'}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400 truncate max-w-[180px]" title={unsignedAssets.map(a => a.name).join(', ')}>
+                                {unsignedAssets.map(a => a.name).join(', ')}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 w-fit flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/40">
+                              <span className="material-symbols-outlined text-[12px]">check_circle</span>
+                              All Signed
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-8 py-6">
+                          <span className="px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400">Active</span>
+                        </td>
+                        <td className="px-8 py-6 text-right relative">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === member.id ? null : member.id); }}
+                            className="p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-400 dark:text-slate-500"
                           >
-                            <button
-                              onClick={() => { setEditingMember(member); setOpenMenuId(null); }}
-                              className="w-full px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 text-xs font-bold dark:text-white transition-colors"
+                            <span className="material-symbols-outlined">more_vert</span>
+                          </button>
+
+                          {openMenuId === member.id && (
+                            <div
+                              ref={menuRef}
+                              className="absolute right-8 top-16 w-52 glass-panel rounded-2xl shadow-2xl overflow-hidden z-[100] animate-fade-in border border-slate-200 dark:border-slate-800 text-left"
                             >
-                              <span className="material-symbols-outlined text-sm">edit</span>
-                              Edit Profile
-                            </button>
-                            <button
-                              onClick={() => { setRevokingMember(member); setOpenMenuId(null); }}
-                              className="w-full px-5 py-3 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center gap-3 text-xs font-bold text-red-600 transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-sm">lock_person</span>
-                              Revoke Access
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                              <button
+                                onClick={() => { setConsentModalTarget(member); setOpenMenuId(null); }}
+                                className="w-full px-5 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 flex items-center gap-3 text-xs font-bold text-indigo-600 dark:text-indigo-400 transition-colors border-b border-slate-100 dark:border-slate-800/60"
+                              >
+                                <span className="material-symbols-outlined text-sm">verified_user</span>
+                                Request Consent
+                              </button>
+                              <button
+                                onClick={() => { setEditingMember(member); setOpenMenuId(null); }}
+                                className="w-full px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 text-xs font-bold dark:text-white transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-sm">edit</span>
+                                Edit Profile
+                              </button>
+                              <button
+                                onClick={() => { setRevokingMember(member); setOpenMenuId(null); }}
+                                className="w-full px-5 py-3 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center gap-3 text-xs font-bold text-red-600 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-sm">lock_person</span>
+                                Revoke Access
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -717,6 +792,132 @@ export const Settings: React.FC = () => {
         onClose={() => setEditingMember(null)}
         onConfirm={updateMember}
       />
+
+      {/* Request Consent Sign-off Modal */}
+      {consentModalTarget && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-md" onClick={() => setConsentModalTarget(null)}></div>
+          <div className="relative z-10 w-full max-w-md bg-[#0F172A] border border-slate-800 rounded-[2.5rem] shadow-2xl overflow-hidden animate-fade-in p-7 text-left text-white my-auto">
+            
+            {/* Header */}
+            <div className="flex items-start justify-between mb-6 pb-5 border-b border-slate-800/80">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center shadow-lg shadow-indigo-500/10">
+                  <span className="material-symbols-outlined text-2xl font-bold">verified_user</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight text-white leading-tight">Request Consent Sign-off</h3>
+                  <p className="text-xs font-semibold text-slate-400 mt-0.5">Target: {consentModalTarget.name}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setConsentModalTarget(null)}
+                className="w-8 h-8 rounded-full bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {/* Subtitle / Instruction */}
+            <p className="text-xs font-bold text-slate-300 mb-4 tracking-wide">Select which type of consent agreement to request:</p>
+
+            {/* Options Cards */}
+            <div className="space-y-3 mb-8">
+              
+              {/* Option 1: BYOD Policy Consent */}
+              <button
+                onClick={() => handleExecuteConsentRequest('byod')}
+                disabled={!!loadingOption}
+                className={`w-full flex items-center gap-4 p-4 rounded-2xl bg-[#162032] border transition-all group text-left ${
+                  loadingOption === 'byod' ? 'border-indigo-500 bg-indigo-950/20 opacity-90' : 'border-slate-800/80 hover:border-indigo-500/50 hover:bg-[#1c2940]'
+                } ${loadingOption && loadingOption !== 'byod' ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                <div className="w-12 h-12 rounded-xl bg-slate-900/80 border border-slate-800 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                  {loadingOption === 'byod' ? (
+                    <span className="material-symbols-outlined text-2xl animate-spin text-indigo-400">sync</span>
+                  ) : (
+                    <span className="material-symbols-outlined text-2xl">devices</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-black text-white group-hover:text-indigo-300 transition-colors">BYOD Policy Consent</h4>
+                    {loadingOption === 'byod' && <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-400 animate-pulse">Sending...</span>}
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                    {loadingOption === 'byod' ? 'Dispatching security & MDM consent email...' : 'Personal device security & MDM terms'}
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: Asset Custody Consent */}
+              <button
+                onClick={() => handleExecuteConsentRequest('asset')}
+                disabled={!!loadingOption}
+                className={`w-full flex items-center gap-4 p-4 rounded-2xl bg-[#162032] border transition-all group text-left ${
+                  loadingOption === 'asset' ? 'border-indigo-500 bg-indigo-950/20 opacity-90' : 'border-slate-800/80 hover:border-indigo-500/50 hover:bg-[#1c2940]'
+                } ${loadingOption && loadingOption !== 'asset' ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                <div className="w-12 h-12 rounded-xl bg-slate-900/80 border border-slate-800 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                  {loadingOption === 'asset' ? (
+                    <span className="material-symbols-outlined text-2xl animate-spin text-indigo-400">sync</span>
+                  ) : (
+                    <span className="material-symbols-outlined text-2xl">inventory_2</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-black text-white group-hover:text-indigo-300 transition-colors">Asset Custody Consent</h4>
+                    {loadingOption === 'asset' && <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-400 animate-pulse">Sending...</span>}
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                    {loadingOption === 'asset' ? 'Dispatching hardware custody email...' : 'Company-owned hardware custody sign-off'}
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 3: Request Both Consents */}
+              <button
+                onClick={() => handleExecuteConsentRequest('both')}
+                disabled={!!loadingOption}
+                className={`w-full flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-xl shadow-indigo-600/30 hover:from-indigo-500 hover:to-indigo-400 transition-all group text-left border border-indigo-400/30 ${
+                  loadingOption === 'both' ? 'opacity-90 ring-2 ring-indigo-400' : ''
+                } ${loadingOption && loadingOption !== 'both' ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                <div className="w-12 h-12 rounded-xl bg-white/15 border border-white/20 text-white flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                  {loadingOption === 'both' ? (
+                    <span className="material-symbols-outlined text-2xl animate-spin">sync</span>
+                  ) : (
+                    <span className="material-symbols-outlined text-2xl">task_alt</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-black text-white">Request Both Consents</h4>
+                    {loadingOption === 'both' && <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-100 animate-pulse">Sending...</span>}
+                  </div>
+                  <p className="text-[11px] font-semibold text-indigo-100 mt-0.5">
+                    {loadingOption === 'both' ? 'Dispatching BYOD & Asset Custody emails...' : 'Trigger BYOD & Asset Custody sign-offs'}
+                  </p>
+                </div>
+              </button>
+
+            </div>
+
+            {/* Footer Cancel Button */}
+            <div className="text-center pt-2">
+              <button
+                onClick={() => setConsentModalTarget(null)}
+                className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 hover:text-white transition-colors"
+              >
+                CANCEL
+              </button>
+            </div>
+
+          </div>
+        </div>,
+        document.body
+      )}
 
       {revokingMember && (
         <div className="fixed inset-0 z-[170] flex items-center justify-center p-4">
