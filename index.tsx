@@ -3,6 +3,10 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 import { applyCachedTheme } from './themes';
+import { setupApiInterceptor } from './apiUrl';
+
+// Initialize API URL interceptor for environment-driven backend endpoints
+setupApiInterceptor();
 
 // Restore the last saved theme before first paint to avoid a color flash
 applyCachedTheme();
