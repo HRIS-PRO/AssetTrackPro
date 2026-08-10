@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 import { applyCachedTheme } from './themes';
-import { setupApiInterceptor } from './apiUrl';
+import { setupApiInterceptor } from './apiInterceptor';
 
 // Initialize API URL interceptor for environment-driven backend endpoints
 setupApiInterceptor();

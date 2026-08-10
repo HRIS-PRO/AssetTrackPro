@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       host: '0.0.0.0',
       proxy: {
-        '/api': {
+        '^/api/': {
           target: backendTarget,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, '')
