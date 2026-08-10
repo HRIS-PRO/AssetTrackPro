@@ -98,7 +98,7 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
                 )}
                 <div className="absolute inset-x-0 bottom-8 flex justify-center">
                    <div className="px-4 py-2 bg-white dark:bg-slate-900 rounded-2xl shadow-xl flex items-center gap-2 border border-slate-100 dark:border-slate-800">
-                      <span className="text-[10px] font-mono font-bold text-slate-400">{viewingAsset.assetNumber || `UID: ${viewingAsset.id.slice(0, 12)}`}</span>
+                      <span className="text-[10px] font-mono font-bold text-slate-400">{viewingAsset.id}</span>
                    </div>
                 </div>
              </div>
@@ -178,8 +178,8 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-10">
-                 <SpecGroup label="Model Identifier" value={viewingAsset.modelNumber || 'ATP-STANDARD-GEN1'} icon="id_card" />
-                 <SpecGroup label="Stock Unit ID" value={viewingAsset.id} icon="inventory" />
+                 <SpecGroup label="Asset Number" value={viewingAsset.assetNumber || viewingAsset.id} icon="inventory" />
+                 <SpecGroup label="Internal Ref" value={viewingAsset.id} icon="id_card" />
                  <SpecGroup label="Serial Key" value={viewingAsset.serialNumber || 'SN-UNAVAILABLE-00'} icon="key" />
                  <SpecGroup label="Hardware Category" value={viewingAsset.category} icon="category" />
                  <SpecGroup label="Operational Health" value={viewingAsset.condition} icon="monitor_heart" />
