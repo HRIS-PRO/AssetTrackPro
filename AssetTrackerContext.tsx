@@ -4,6 +4,7 @@ import { applyTheme, DEFAULT_THEME_ID } from './themes';
 
 export interface OrgSettings {
   orgName: string;
+  orgMnemonic?: string;
   contactEmail: string;
   theme: string;
   logoUrl?: string | null;
@@ -23,6 +24,7 @@ export interface ByodSignedRecord {
 
 const DEFAULT_ORG_SETTINGS: OrgSettings = {
   orgName: 'AssetTrackPro Enterprise',
+  orgMnemonic: 'NF',
   contactEmail: 'admin@assettrack.pro',
   theme: DEFAULT_THEME_ID,
   logoUrl: null,
@@ -36,10 +38,10 @@ interface AssetTrackerContextType {
   team: User[];
   setTeam: React.Dispatch<React.SetStateAction<User[]>>;
   allEmployees: any[];
-  departments: { id: string, name: string, head?: { name: string }, headName?: string }[];
+  departments: { id: string, name: string, mnemonic?: string, head?: { name: string }, headName?: string }[];
   setDepartments: React.Dispatch<React.SetStateAction<any[]>>;
-  categories: { id: string, name: string }[];
-  setCategories: React.Dispatch<React.SetStateAction<{ id: string, name: string }[]>>;
+  categories: { id: string, name: string, mnemonic?: string }[];
+  setCategories: React.Dispatch<React.SetStateAction<{ id: string, name: string, mnemonic?: string }[]>>;
   assetLocations: { id: string, name: string }[];
   setAssetLocations: React.Dispatch<React.SetStateAction<{ id: string, name: string }[]>>;
   requests: EquipmentRequest[];
