@@ -31,8 +31,9 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
         if (ctx) {
           ctx.lineJoin = 'round';
           ctx.lineCap = 'round';
-          ctx.lineWidth = 2.5;
-          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 3;
+          const isDark = document.documentElement.classList.contains('dark');
+          ctx.strokeStyle = isDark ? '#818CF8' : '#0F172A';
         }
       }
     }
@@ -61,6 +62,10 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    const isDark = document.documentElement.classList.contains('dark');
+    ctx.strokeStyle = isDark ? '#818CF8' : '#0F172A';
+    ctx.lineWidth = 3;
 
     const { x, y } = getCanvasPos(e, canvas);
     ctx.beginPath();

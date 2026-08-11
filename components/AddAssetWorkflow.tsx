@@ -295,7 +295,7 @@ export const AddAssetWorkflow: React.FC<AddAssetWorkflowProps> = ({
              </div>
              <div className="space-y-4">
                 <h2 className="text-5xl font-black italic tracking-tighter dark:text-white uppercase leading-none">COMMIT SUCCESSFUL</h2>
-                <p className="text-slate-400 font-bold uppercase tracking-widest text-[11px] max-w-sm mx-auto">Asset node <span className="text-blue-600">#{lastAddedAsset?.id.slice(0, 12)}</span> has been registered and verified in the central ledger.</p>
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-[11px] max-w-sm mx-auto">Asset node <span className="text-blue-600">{lastAddedAsset?.assetNumber || `#${lastAddedAsset?.id.slice(0, 12)}`}</span> has been registered and verified in the central ledger.</p>
              </div>
              
              <button onClick={() => setIsAdding(false)} className="px-16 py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-3xl font-black uppercase text-xs tracking-[0.25em] shadow-2xl hover:scale-105 active:scale-95 transition-all">

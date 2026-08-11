@@ -127,22 +127,50 @@ export interface Activity {
   isRead: boolean;
 }
 
+export interface AssetCategory {
+  id: string;
+  name: string;
+  mnemonic?: string;
+  managedById?: string | null;
+}
+
+export interface AssetLocation {
+  id: string;
+  name: string;
+}
+
+export interface OrgSettings {
+  id?: string;
+  orgName?: string;
+  orgMnemonic?: string;
+  contactEmail?: string;
+  theme?: string;
+  logoUrl?: string | null;
+}
+
+export interface Department {
+  id: string;
+  name: string;
+  mnemonic?: string;
+}
+
 export enum ReportStatus {
   PENDING = 'PENDING',
-  IN_REVIEW = 'IN_REVIEW',
-  RESOLVED = 'RESOLVED'
+  IN_PROGRESS = 'IN_PROGRESS',
+  RESOLVED = 'RESOLVED',
+  REJECTED = 'REJECTED'
 }
 
 export interface AssetReport {
   id: string;
   assetId: string;
   userId: string;
-  comment: string;
+  description: string;
   status: ReportStatus;
   createdAt: string;
   updatedAt: string;
   assetName?: string;
-  assetCategory?: string;
-  assetSerialNumber?: string;
+  assetNumber?: string;
   userName?: string;
 }
+

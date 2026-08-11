@@ -60,11 +60,13 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   const [inlineAssignAssetId, setInlineAssignAssetId] = useState<string | null>(null);
   const [inlineUserSearch, setInlineUserSearch] = useState('');
   const [isInlineAssigning, setIsInlineAssigning] = useState<string | null>(null);
+  const [inlineSendConsentMail, setInlineSendConsentMail] = useState(true);
 
   // Super Admin Action State
   const [isReassigningAssetId, setIsReassigningAssetId] = useState<string | null>(null);
   const [reassignUserSearch, setReassignUserSearch] = useState('');
   const [isSubmittingReassign, setIsSubmittingReassign] = useState(false);
+  const [reassignSendConsentMail, setReassignSendConsentMail] = useState(true);
   const [isDecommissioningAssetId, setIsDecommissioningAssetId] = useState<string | null>(null);
   const [isSubmittingDecommission, setIsSubmittingDecommission] = useState(false);
   const [isUnassigningAssetId, setIsUnassigningAssetId] = useState<string | null>(null);
@@ -231,7 +233,8 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       assignedTo: userToAssign.userId || userToAssign.id,
       manager: managerName,
       department: finalDeptName,
-      location: userToAssign.location || 'HQ Office'
+      location: userToAssign.location || 'HQ Office',
+      sendConsentMail: inlineSendConsentMail
     };
 
     try {
@@ -250,6 +253,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         setAssets(prev => prev.map(a => a.id === assetId ? updatedAsset : a));
         setInlineAssignAssetId(null);
         setInlineUserSearch('');
+        setInlineSendConsentMail(true);
       }
     } catch (err) {
       console.error(err);
@@ -292,7 +296,8 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       assignedTo: userToAssign.userId || userToAssign.id,
       manager: managerName,
       department: finalDeptName,
-      location: userToAssign.location || 'HQ Office'
+      location: userToAssign.location || 'HQ Office',
+      sendConsentMail: reassignSendConsentMail
     };
 
     try {
@@ -311,6 +316,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         setAssets(prev => prev.map(a => a.id === isReassigningAssetId ? updatedAsset : a));
         setIsReassigningAssetId(null);
         setReassignUserSearch('');
+        setReassignSendConsentMail(true);
       }
     } catch (err) {
       console.error(err);
@@ -502,7 +508,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       {/* Reassign Modal */}
       {isReassigningAssetId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsReassigningAssetId(null)}></div>
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => { setIsReassigningAssetId(null); setReassignSendConsentMail(true); }}></div>
           <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-fade-in flex flex-col">
             <div className="p-8 border-b border-slate-100 dark:border-slate-800">
                <div className="flex items-center gap-4">
@@ -516,6 +522,18 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                </div>
             </div>
             <div className="p-8 space-y-6">
+               <label className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 cursor-pointer">
+                 <div>
+                   <p className="text-xs font-black dark:text-white leading-tight">Send consent mail</p>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Off = auto-activate, no signature needed</p>
+                 </div>
+                 <input
+                   type="checkbox"
+                   checked={reassignSendConsentMail}
+                   onChange={e => setReassignSendConsentMail(e.target.checked)}
+                   className="w-5 h-5 rounded-md accent-blue-600 cursor-pointer"
+                 />
+               </label>
                <div className="relative group">
                  <input
                    type="text"
@@ -806,6 +824,15 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
                           <div className="relative">
                             {inlineAssignAssetId === asset.id ? (
                               <div className="absolute top-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 shadow-2xl rounded-3xl border border-slate-100 dark:border-slate-800 p-3 animate-fade-in" onClick={e => e.stopPropagation()}>
+                                <label className="flex items-center justify-between gap-2 px-2 py-2 mb-2 rounded-xl bg-slate-50 dark:bg-slate-800 cursor-pointer">
+                                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Send consent mail</span>
+                                  <input
+                                    type="checkbox"
+                                    checked={inlineSendConsentMail}
+                                    onChange={e => setInlineSendConsentMail(e.target.checked)}
+                                    className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                                  />
+                                </label>
                                 <input autoFocus placeholder="Find custodian..." className="w-full px-4 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-800 border-none rounded-xl mb-3 outline-none focus:ring-2 focus:ring-blue-600" value={inlineUserSearch} onChange={e => setInlineUserSearch(e.target.value)} />
                                 <div className="max-h-48 overflow-y-auto space-y-1 scrollbar-hide">
                                   {filteredInlineUsers.map(u => (

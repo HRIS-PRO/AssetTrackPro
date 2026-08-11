@@ -17,6 +17,8 @@ import { RequestAssetModal } from './components/RequestAssetModal';
 import { ReportProblemModal } from './components/ReportProblemModal';
 import { AssetConsent } from './components/AssetConsent';
 import { AssetConsentDocument } from './components/AssetConsentDocument';
+import { ConsentManagement } from './components/ConsentManagement';
+import { ByodConsent } from './components/ByodConsent';
 import { ScanView } from './components/ScanView';
 import { ToastProvider, useToast } from './components/Toast';
 import { useReportSocket } from './hooks/useReportSocket';
@@ -248,6 +250,8 @@ const AppContent: React.FC = () => {
               onReportIssue={(id) => { setModalInitialAssetId(id); setActiveModal('report'); }}
             />} />
             <Route path="/consent/:assetId/document" element={<AssetConsentDocument />} />
+            <Route path="/consent/byod/:userId?" element={<ByodConsent />} />
+            <Route path="/consent-management" element={<ConsentManagement />} />
             <Route path="/requests" element={<Requests
               onRequestAsset={() => setActiveModal('request')}
             />} />
