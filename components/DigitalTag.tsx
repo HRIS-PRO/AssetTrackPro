@@ -30,7 +30,7 @@ export const DigitalTag: React.FC<DigitalTagProps> = ({ asset, onClose }) => {
   // The QR payload carries BOTH a readable snapshot AND the live scan URL.
   const qrPayload = useMemo(() => {
     return [
-      'AssetTrackPro Asset Tag',
+      'NOLT Finance Asset Tag',
       `No: ${displayNumber}`,
       `Name: ${asset.name}`,
       `Serial: ${asset.serialNumber || 'N/A'}`,
@@ -51,7 +51,7 @@ export const DigitalTag: React.FC<DigitalTagProps> = ({ asset, onClose }) => {
     if (!qrDataUrl) return;
     const link = document.createElement('a');
     link.href = qrDataUrl;
-    link.download = `${displayNumber}-tag.png`;
+    link.download = `${displayNumber}-nolt-finance-tag.png`;
     link.click();
   };
 
@@ -60,17 +60,19 @@ export const DigitalTag: React.FC<DigitalTagProps> = ({ asset, onClose }) => {
     const win = window.open('', '_blank', 'width=480,height=640');
     if (!win) return;
     win.document.write(`
-      <html><head><title>${displayNumber} - Asset Tag</title>
+      <html><head><title>${displayNumber} - NOLT Finance Asset Tag</title>
       <style>
         body{font-family:system-ui,sans-serif;text-align:center;padding:32px;margin:0;}
         .card{border:3px solid #0f172a;border-radius:24px;padding:28px;display:inline-block;max-width:360px;}
+        .brand{font-weight:900;font-size:13px;letter-spacing:3px;color:#2563eb;margin-bottom:12px;text-transform:uppercase;}
         img{width:240px;height:240px;}
-        .num{font-weight:800;font-size:20px;letter-spacing:1px;margin-top:12px;}
+        .num{font-weight:800;font-size:18px;letter-spacing:1px;margin-top:12px;}
         .name{font-weight:700;font-size:15px;color:#334155;margin-top:4px;}
         .meta{font-size:12px;color:#64748b;margin-top:10px;line-height:1.6;}
       </style></head>
       <body onload="window.print();window.close();">
         <div class="card">
+          <div class="brand">NOLT Finance</div>
           <img src="${qrDataUrl}" />
           <div class="num">${displayNumber}</div>
           <div class="name">${asset.name}</div>
@@ -85,7 +87,7 @@ export const DigitalTag: React.FC<DigitalTagProps> = ({ asset, onClose }) => {
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose}></div>
       <div className="relative bg-white dark:bg-slate-950 w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 border border-slate-200 dark:border-slate-800 animate-fade-in">
         <div className="text-center space-y-1 mb-8">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-500">Digital Asset Tag</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.35em] text-blue-600 dark:text-blue-400">NOLT FINANCE • ASSET TAG</p>
           <h2 className="text-2xl font-black tracking-tight dark:text-white">{asset.name}</h2>
         </div>
 

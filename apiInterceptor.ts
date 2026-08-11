@@ -13,9 +13,8 @@ export function buildUrl(path: string): string {
   const base = envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
   let cleanPath = normalizedPath;
 
-  // If base already includes '/api' (e.g., https://dev.noltfinance.com/api/HRIS)
-  // and path starts with '/api/', strip leading '/api' from path to avoid double '/api'
-  if (cleanPath.startsWith('/api/') && base.toLowerCase().includes('/api')) {
+  // Strip leading '/api' from path since backend routes are registered at root (/assets, /auth, etc.)
+  if (cleanPath.startsWith('/api/')) {
     cleanPath = cleanPath.substring(4);
   }
 

@@ -33,6 +33,8 @@ export const Settings: React.FC = () => {
 
   // General tab form state (synced from saved org settings)
   const [formName, setFormName] = useState(orgSettings.orgName);
+  const [formMnemonic, setFormMnemonic] = useState(orgSettings.orgMnemonic || 'NF');
+  const [newCatMnemonic, setNewCatMnemonic] = useState('');
   const [formEmail, setFormEmail] = useState(orgSettings.contactEmail);
   const [formTheme, setFormTheme] = useState(orgSettings.theme);
   const [formLogo, setFormLogo] = useState<string | null>(orgSettings.logoUrl || null);
@@ -49,6 +51,7 @@ export const Settings: React.FC = () => {
   // Re-sync the form whenever fresh settings arrive from the server
   useEffect(() => {
     setFormName(orgSettings.orgName);
+    setFormMnemonic(orgSettings.orgMnemonic || 'NF');
     setFormEmail(orgSettings.contactEmail);
     setFormTheme(orgSettings.theme);
     setFormLogo(orgSettings.logoUrl || null);
@@ -62,6 +65,7 @@ export const Settings: React.FC = () => {
 
   const isDirty =
     formName !== orgSettings.orgName ||
+    formMnemonic !== (orgSettings.orgMnemonic || 'NF') ||
     formEmail !== orgSettings.contactEmail ||
     formTheme !== orgSettings.theme ||
     formLogo !== (orgSettings.logoUrl || null);
@@ -136,6 +140,7 @@ export const Settings: React.FC = () => {
 
   const handleDiscardGeneral = () => {
     setFormName(orgSettings.orgName);
+    setFormMnemonic(orgSettings.orgMnemonic || 'NF');
     setFormEmail(orgSettings.contactEmail);
     setFormTheme(orgSettings.theme);
     setFormLogo(orgSettings.logoUrl || null);
@@ -151,6 +156,7 @@ export const Settings: React.FC = () => {
     try {
       await saveOrgSettings({
         orgName: formName.trim(),
+        orgMnemonic: formMnemonic.trim().toUpperCase(),
         contactEmail: formEmail.trim(),
         theme: formTheme,
         logoUrl: formLogo
@@ -274,6 +280,7 @@ export const Settings: React.FC = () => {
           },
           body: JSON.stringify({
             name: newCat,
+            mnemonic: newCatMnemonic.trim().toUpperCase() || undefined,
             managedById: selectedSA || undefined
           })
         });
@@ -281,6 +288,7 @@ export const Settings: React.FC = () => {
           const added = await res.json();
           setCategories([...categories, added]);
           setNewCat('');
+          setNewCatMnemonic('');
           setSelectedSA('');
         }
       } catch (err) {
@@ -402,18 +410,32 @@ export const Settings: React.FC = () => {
                   <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white">Organization Profile</h3>
                 </div>
                 <div className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Organization Name</label>
-                    <input
-                      type="text"
-                      value={formName}
-                      onChange={e => setFormName(e.target.value)}
-                      disabled={!isOrgAdmin}
-                      className="w-full px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner disabled:text-slate-400 disabled:cursor-not-allowed"
-                    />
-                    {isOrgAdmin && nameError && formName !== orgSettings.orgName && (
-                      <p className="text-[10px] font-black uppercase tracking-widest text-red-500 ml-2">{nameError}</p>
-                    )}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="sm:col-span-2 space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Organization Name</label>
+                      <input
+                        type="text"
+                        value={formName}
+                        onChange={e => setFormName(e.target.value)}
+                        disabled={!isOrgAdmin}
+                        className="w-full px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner disabled:text-slate-400 disabled:cursor-not-allowed"
+                      />
+                      {isOrgAdmin && nameError && formName !== orgSettings.orgName && (
+                        <p className="text-[10px] font-black uppercase tracking-widest text-red-500 ml-2">{nameError}</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Company Code</label>
+                      <input
+                        type="text"
+                        placeholder="NF"
+                        maxLength={6}
+                        value={formMnemonic}
+                        onChange={e => setFormMnemonic(e.target.value.toUpperCase())}
+                        disabled={!isOrgAdmin}
+                        className="w-full px-6 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-black text-center tracking-wider text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner disabled:text-slate-400 disabled:cursor-not-allowed"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Contact Email</label>
@@ -596,15 +618,18 @@ export const Settings: React.FC = () => {
               <div className="flex flex-wrap gap-3">
                 {categories.map(cat => (
                   <div key={cat.id} className="group flex items-center gap-2 px-5 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full text-xs font-black uppercase tracking-widest shadow-lg transition-all hover:scale-105">
-                    {cat.name}
+                    <span>{cat.name}</span>
+                    {cat.mnemonic && (
+                      <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 dark:text-blue-600 text-[10px] font-black">{cat.mnemonic.toUpperCase()}</span>
+                    )}
                     <button onClick={() => handleDeleteCategory(cat.id)} className="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">close</button>
                   </div>
                 ))}
               </div>
 
               <div className="pt-8 border-t border-slate-50 dark:border-slate-800 space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2 space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Category Name</label>
                     <input
                       type="text"
@@ -615,20 +640,31 @@ export const Settings: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Managing Admin</label>
-                    <div className="relative">
-                      <select
-                        value={selectedSA}
-                        onChange={e => setSelectedSA(e.target.value)}
-                        className="w-full px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-sm dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner appearance-none cursor-pointer"
-                      >
-                        <option value="">Select Admin...</option>
-                        {superAdmins.map(sa => (
-                          <option key={sa.id} value={sa.id}>{sa.email}</option>
-                        ))}
-                      </select>
-                      <span className="material-symbols-outlined absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
-                    </div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Category Code</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. LAP"
+                      maxLength={6}
+                      className="w-full px-6 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-black text-center text-sm tracking-wider dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner"
+                      value={newCatMnemonic}
+                      onChange={e => setNewCatMnemonic(e.target.value.toUpperCase())}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Managing Admin</label>
+                  <div className="relative">
+                    <select
+                      value={selectedSA}
+                      onChange={e => setSelectedSA(e.target.value)}
+                      className="w-full px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-sm dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner appearance-none cursor-pointer"
+                    >
+                      <option value="">Select Admin...</option>
+                      {superAdmins.map(sa => (
+                        <option key={sa.id} value={sa.id}>{sa.email}</option>
+                      ))}
+                    </select>
+                    <span className="material-symbols-outlined absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
                   </div>
                 </div>
                 <button
