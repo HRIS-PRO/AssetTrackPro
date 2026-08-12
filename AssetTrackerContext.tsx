@@ -6,6 +6,7 @@ export interface OrgSettings {
   orgName: string;
   orgMnemonic?: string;
   contactEmail: string;
+  hrEmail?: string | null;  // HR department email for consent document routing
   theme: string;
   logoUrl?: string | null;
   updatedAt?: string;
@@ -26,6 +27,7 @@ const DEFAULT_ORG_SETTINGS: OrgSettings = {
   orgName: 'AssetTrackPro Enterprise',
   orgMnemonic: 'NF',
   contactEmail: 'admin@assettrack.pro',
+  hrEmail: null,
   theme: DEFAULT_THEME_ID,
   logoUrl: null,
 };
