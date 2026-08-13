@@ -36,6 +36,7 @@ export const Settings: React.FC = () => {
   const [formMnemonic, setFormMnemonic] = useState(orgSettings.orgMnemonic || 'NF');
   const [newCatMnemonic, setNewCatMnemonic] = useState('');
   const [formEmail, setFormEmail] = useState(orgSettings.contactEmail);
+  const [formHrEmail, setFormHrEmail] = useState(orgSettings.hrEmail || '');
   const [formTheme, setFormTheme] = useState(orgSettings.theme);
   const [formLogo, setFormLogo] = useState<string | null>(orgSettings.logoUrl || null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -53,6 +54,7 @@ export const Settings: React.FC = () => {
     setFormName(orgSettings.orgName);
     setFormMnemonic(orgSettings.orgMnemonic || 'NF');
     setFormEmail(orgSettings.contactEmail);
+    setFormHrEmail(orgSettings.hrEmail || '');
     setFormTheme(orgSettings.theme);
     setFormLogo(orgSettings.logoUrl || null);
     savedThemeRef.current = orgSettings.theme;
@@ -67,6 +69,7 @@ export const Settings: React.FC = () => {
     formName !== orgSettings.orgName ||
     formMnemonic !== (orgSettings.orgMnemonic || 'NF') ||
     formEmail !== orgSettings.contactEmail ||
+    formHrEmail !== (orgSettings.hrEmail || '') ||
     formTheme !== orgSettings.theme ||
     formLogo !== (orgSettings.logoUrl || null);
 
@@ -142,6 +145,7 @@ export const Settings: React.FC = () => {
     setFormName(orgSettings.orgName);
     setFormMnemonic(orgSettings.orgMnemonic || 'NF');
     setFormEmail(orgSettings.contactEmail);
+    setFormHrEmail(orgSettings.hrEmail || '');
     setFormTheme(orgSettings.theme);
     setFormLogo(orgSettings.logoUrl || null);
     setSaveError(null);
@@ -158,6 +162,7 @@ export const Settings: React.FC = () => {
         orgName: formName.trim(),
         orgMnemonic: formMnemonic.trim().toUpperCase(),
         contactEmail: formEmail.trim(),
+        hrEmail: formHrEmail.trim() || null,
         theme: formTheme,
         logoUrl: formLogo
       });
@@ -449,6 +454,23 @@ export const Settings: React.FC = () => {
                     {isOrgAdmin && emailError && formEmail !== orgSettings.contactEmail && (
                       <p className="text-[10px] font-black uppercase tracking-widest text-red-500 ml-2">{emailError}</p>
                     )}
+                  </div>
+
+                  {/* HR Email — routes the signed consent PDF */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">HR Department Email</label>
+                      <span className="px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[8px] font-black uppercase tracking-widest">Used for consent routing</span>
+                    </div>
+                    <input
+                      type="email"
+                      placeholder="e.g. hr@yourcompany.com"
+                      value={formHrEmail}
+                      onChange={e => setFormHrEmail(e.target.value)}
+                      disabled={!isOrgAdmin}
+                      className="w-full px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner disabled:text-slate-400 disabled:cursor-not-allowed placeholder:text-slate-300"
+                    />
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-2">When an employee clicks "Send to HR Mail" on their consent document, the signed PDF is delivered here.</p>
                   </div>
                   {!isOrgAdmin && (
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2 flex items-center gap-2">
