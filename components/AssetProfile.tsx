@@ -46,8 +46,8 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
   return (
     <div className="space-y-10 animate-fade-in pb-20">
       {/* Navigation & Header */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-8">
-        <div className="space-y-4">
+      <div className="flex flex-col xl:flex-row justify-between items-start gap-8 mb-12">
+        <div className="space-y-4 min-w-0 flex-1 w-full">
           <button 
             onClick={onBack} 
             className="flex items-center gap-2 text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-[0.2em] transition-all group"
@@ -57,7 +57,7 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
           </button>
           
           <div className="flex flex-wrap items-center gap-6">
-            <h2 className="text-5xl md:text-6xl font-black tracking-tighter dark:text-white leading-none">
+            <h2 className="text-5xl md:text-6xl font-black tracking-tighter dark:text-white leading-none break-words">
               {viewingAsset.name}
             </h2>
             <div className={`flex items-center gap-3 px-6 py-2 rounded-full text-[11px] font-black uppercase tracking-widest shadow-lg ${getStatusColor(viewingAsset.status)}`}>
@@ -67,16 +67,16 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 w-full xl:w-auto">
+        <div className="flex items-center gap-5 flex-shrink-0 w-full xl:w-auto overflow-x-auto pb-2 xl:pb-0 xl:mt-10">
            {isSuperAdmin && (
-             <button onClick={() => setShowDigitalTag(true)} className="flex-1 md:flex-none btn-secondary group">
-               <span className="material-symbols-outlined text-xl group-hover:rotate-12 transition-transform">qr_code_2</span>
+             <button onClick={() => setShowDigitalTag(true)} className="flex-1 xl:flex-none btn-secondary group whitespace-nowrap">
+               <span className="material-symbols-outlined text-xl">qr_code_2</span>
                Digital Tag
              </button>
            )}
            {(isSuperAdmin || isAuditor) && (
-             <button onClick={() => onModifyAsset(viewingAsset.id)} className="flex-1 md:flex-none btn-primary group">
-               <span className="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">edit_square</span>
+             <button onClick={() => onModifyAsset(viewingAsset.id)} className="flex-1 xl:flex-none btn-primary group whitespace-nowrap">
+               <span className="material-symbols-outlined text-xl">edit_square</span>
                Modify Data
              </button>
            )}
