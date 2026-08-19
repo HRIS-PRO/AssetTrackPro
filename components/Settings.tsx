@@ -98,17 +98,31 @@ export const Settings: React.FC = () => {
 
     try {
       const token = localStorage.getItem('asset_track_token');
-      const formData = new FormData();
-      formData.append('file', file);
+      
+      const base64String = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+      });
+
+      const payload = {
+        fileBase64: base64String,
+        mimetype: file.type,
+        filename: file.name
+      };
 
       const res = await fetch('/api/org-settings/logo', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) {
-        let message = 'Failed to upload logo';
+        let message = `Server responded with ${res.status}`;
         try {
           const body = await res.json();
           if (body?.message) message = body.message;
@@ -122,7 +136,13 @@ export const Settings: React.FC = () => {
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
       console.error("Logo upload failed", err);
-      setLogoError(err.message || 'Failed to upload logo. Please try again.');
+      // Format fetch failure nicely if it's a network drop
+      const msg = err.message || '';
+      if (msg.toLowerCase() === 'fetch failed' || msg.toLowerCase() === 'failed to fetch') {
+        setLogoError('Network error. The server may be offline or the connection was dropped.');
+      } else {
+        setLogoError(msg || 'Failed to upload logo. Please try again.');
+      }
     } finally {
       setIsUploadingLogo(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -154,6 +174,17 @@ export const Settings: React.FC = () => {
   };
 
   const handleSaveGeneral = async () => {
+    // Automatically add any pending valid email in the input box before saving
+    let finalHrEmails = [...formHrEmails];
+    if (hrEmailInput.trim() && EMAIL_REGEX.test(hrEmailInput.trim())) {
+      const val = hrEmailInput.trim();
+      if (!finalHrEmails.includes(val) && finalHrEmails.length < 5) {
+        finalHrEmails.push(val);
+        setFormHrEmails(finalHrEmails);
+        setHrEmailInput('');
+      }
+    }
+
     if (!formValid || isSavingGeneral) return;
     setIsSavingGeneral(true);
     setSaveError(null);
@@ -162,7 +193,7 @@ export const Settings: React.FC = () => {
         orgName: formName.trim(),
         orgMnemonic: formMnemonic.trim().toUpperCase(),
         contactEmail: formEmail.trim(),
-        hrEmails: formHrEmails,
+        hrEmails: finalHrEmails,
         theme: formTheme,
         logoUrl: formLogo
       });
