@@ -36,7 +36,8 @@ export const Settings: React.FC = () => {
   const [formMnemonic, setFormMnemonic] = useState(orgSettings.orgMnemonic || 'NF');
   const [newCatMnemonic, setNewCatMnemonic] = useState('');
   const [formEmail, setFormEmail] = useState(orgSettings.contactEmail);
-  const [formHrEmail, setFormHrEmail] = useState(orgSettings.hrEmail || '');
+  const [formHrEmails, setFormHrEmails] = useState<string[]>(orgSettings.hrEmails || []);
+  const [hrEmailInput, setHrEmailInput] = useState('');
   const [formTheme, setFormTheme] = useState(orgSettings.theme);
   const [formLogo, setFormLogo] = useState<string | null>(orgSettings.logoUrl || null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -54,7 +55,7 @@ export const Settings: React.FC = () => {
     setFormName(orgSettings.orgName);
     setFormMnemonic(orgSettings.orgMnemonic || 'NF');
     setFormEmail(orgSettings.contactEmail);
-    setFormHrEmail(orgSettings.hrEmail || '');
+    setFormHrEmails(orgSettings.hrEmails || []);
     setFormTheme(orgSettings.theme);
     setFormLogo(orgSettings.logoUrl || null);
     savedThemeRef.current = orgSettings.theme;
@@ -69,7 +70,7 @@ export const Settings: React.FC = () => {
     formName !== orgSettings.orgName ||
     formMnemonic !== (orgSettings.orgMnemonic || 'NF') ||
     formEmail !== orgSettings.contactEmail ||
-    formHrEmail !== (orgSettings.hrEmail || '') ||
+    JSON.stringify(formHrEmails) !== JSON.stringify(orgSettings.hrEmails || []) ||
     formTheme !== orgSettings.theme ||
     formLogo !== (orgSettings.logoUrl || null);
 
@@ -117,7 +118,6 @@ export const Settings: React.FC = () => {
 
       const data = await res.json();
       setFormLogo(data.logoUrl);
-      await saveOrgSettings({ logoUrl: data.logoUrl });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
@@ -145,7 +145,7 @@ export const Settings: React.FC = () => {
     setFormName(orgSettings.orgName);
     setFormMnemonic(orgSettings.orgMnemonic || 'NF');
     setFormEmail(orgSettings.contactEmail);
-    setFormHrEmail(orgSettings.hrEmail || '');
+    setFormHrEmails(orgSettings.hrEmails || []);
     setFormTheme(orgSettings.theme);
     setFormLogo(orgSettings.logoUrl || null);
     setSaveError(null);
@@ -162,7 +162,7 @@ export const Settings: React.FC = () => {
         orgName: formName.trim(),
         orgMnemonic: formMnemonic.trim().toUpperCase(),
         contactEmail: formEmail.trim(),
-        hrEmail: formHrEmail.trim() || null,
+        hrEmails: formHrEmails,
         theme: formTheme,
         logoUrl: formLogo
       });
@@ -456,21 +456,74 @@ export const Settings: React.FC = () => {
                     )}
                   </div>
 
-                  {/* HR Email — routes the signed consent PDF */}
+                  {/* HR Emails — routes the signed consent PDF */}
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 mb-1">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">HR Department Email</label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">HR Department Emails</label>
                       <span className="px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[8px] font-black uppercase tracking-widest">Used for consent routing</span>
                     </div>
-                    <input
-                      type="email"
-                      placeholder="e.g. hr@yourcompany.com"
-                      value={formHrEmail}
-                      onChange={e => setFormHrEmail(e.target.value)}
-                      disabled={!isOrgAdmin}
-                      className="w-full px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner disabled:text-slate-400 disabled:cursor-not-allowed placeholder:text-slate-300"
-                    />
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-2">When an employee clicks "Send to HR Mail" on their consent document, the signed PDF is delivered here.</p>
+
+                    {formHrEmails.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2 px-2">
+                        {formHrEmails.map((email, idx) => (
+                          <div key={idx} className="flex items-center bg-slate-200 dark:bg-slate-700 rounded-full px-3 py-1">
+                            <span className="text-xs font-bold text-slate-800 dark:text-white mr-2">{email}</span>
+                            {isOrgAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => setFormHrEmails(prev => prev.filter((_, i) => i !== idx))}
+                                className="text-slate-500 hover:text-red-500 flex items-center justify-center"
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>close</span>
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="relative">
+                      <input
+                        type="email"
+                        placeholder={formHrEmails.length >= 5 ? "Maximum of 5 emails reached" : "e.g. hr@yourcompany.com (Press Enter to add)"}
+                        value={hrEmailInput}
+                        onChange={e => setHrEmailInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const val = hrEmailInput.trim();
+                            if (!val || formHrEmails.length >= 5 || formHrEmails.includes(val)) return;
+                            if (EMAIL_REGEX.test(val)) {
+                              setFormHrEmails(prev => [...prev, val]);
+                              setHrEmailInput('');
+                            } else {
+                              addToast({ title: 'Invalid Email', message: 'Please enter a valid email address', type: 'error' });
+                            }
+                          }
+                        }}
+                        disabled={!isOrgAdmin || formHrEmails.length >= 5}
+                        className="w-full px-8 py-4 rounded-3xl bg-slate-50 dark:bg-slate-800 border-none font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 shadow-inner disabled:text-slate-400 disabled:cursor-not-allowed placeholder:text-slate-300"
+                      />
+                      {isOrgAdmin && formHrEmails.length < 5 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = hrEmailInput.trim();
+                            if (!val || formHrEmails.includes(val)) return;
+                            if (EMAIL_REGEX.test(val)) {
+                              setFormHrEmails(prev => [...prev, val]);
+                              setHrEmailInput('');
+                            } else {
+                              addToast({ title: 'Invalid Email', message: 'Please enter a valid email address', type: 'error' });
+                            }
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-100 hover:text-blue-600 flex items-center justify-center transition-colors"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>add</span>
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-2">When an employee clicks "Send to HR Mail" on their consent document, the signed PDF is delivered to all these emails.</p>
                   </div>
                   {!isOrgAdmin && (
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2 flex items-center gap-2">

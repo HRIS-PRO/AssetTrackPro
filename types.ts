@@ -144,6 +144,7 @@ export interface OrgSettings {
   orgName?: string;
   orgMnemonic?: string;
   contactEmail?: string;
+  hrEmails?: string[];
   theme?: string;
   logoUrl?: string | null;
 }
