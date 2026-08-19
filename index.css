@@ -29,12 +29,8 @@
 
     html {
         background-color: #f8fafc;
-        /* Fluid root size: the whole design system is rem-based (padding, radius,
-           font sizes), so scaling this one value keeps proportions consistent
-           across screen sizes instead of every rem utility rendering at a fixed
-           16px baseline regardless of viewport. Scales 14px at 1280px viewports
-           up to 16px at 1920px+, clamped flat outside that range. */
-        font-size: clamp(14px, calc(14px + (100vw - 1280px) * 0.003125), 16px);
+        /* Uniformly scale down the entire UI (text, padding, margins) since Tailwind uses rem */
+        font-size: 13px;
     }
 
     html.dark {
