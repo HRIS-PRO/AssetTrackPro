@@ -9,9 +9,8 @@ export const AssetConsentDocument: React.FC = () => {
   const { assetId } = useParams<{ assetId: string }>();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  // Allow Admins/HR with link to view but we should handle the absence of local token or permissions if this was a standalone view. 
-  // For now, this is part of the AssetTracker app so it relies on context.
   const asset = assets.find(a => a.id === assetId);
 
   if (!asset) return (
@@ -31,20 +30,15 @@ export const AssetConsentDocument: React.FC = () => {
     let pdfBase64 = undefined;
     
     try {
-      // 1. Generate PDF exactly from the document view
       const docElement = document.getElementById('consent-document');
       if (docElement) {
-        // Temporarily hide action buttons so they don't appear in the PDF
-        // Temporarily hide action buttons so they don't appear in the PDF
         const actionButtons = docElement.querySelector('.action-buttons-container') as HTMLElement;
         if (actionButtons) actionButtons.style.display = 'none';
 
-        // Strip rounding for a clean PDF edge
         docElement.style.setProperty('border-radius', '0', 'important');
         docElement.style.setProperty('border', 'none', 'important');
         docElement.style.setProperty('box-shadow', 'none', 'important');
 
-        // Force Light Mode by completely ripping out Tailwind 'dark:' utility classes and injecting explicit colors
         const allElements = [docElement, ...Array.from(docElement.querySelectorAll('*'))];
         const originalClasses = new Map<Element, string>();
         
@@ -57,21 +51,15 @@ export const AssetConsentDocument: React.FC = () => {
                 originalClasses.set(el, el.className);
                 el.className = el.className.split(' ').filter(c => !c.startsWith('dark:')).join(' ');
             }
-            
-            // Hard override text colors to ensure they aren't white
             if (el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'H3' || el.tagName === 'P') {
-                (el as HTMLElement).style.setProperty('color', '#0f172a', 'important'); // slate-900
+                (el as HTMLElement).style.setProperty('color', '#0f172a', 'important');
             }
-            // For lighter grey subtitles that might become invisible on white backgrounds
             if (el.tagName === 'SPAN' && typeof el.className === 'string' && el.className.includes('text-slate-400')) {
-                (el as HTMLElement).style.setProperty('color', '#64748b', 'important'); // slate-500
+                (el as HTMLElement).style.setProperty('color', '#64748b', 'important');
             }
         });
 
-        // Hardcode the container explicitly to white
         docElement.style.setProperty('background-color', '#ffffff', 'important');
-        
-        // Let the browser paint the light mode frame without transitions
         await new Promise(r => setTimeout(r, 100));
 
         const canvas = await html2canvas(docElement, { 
@@ -80,31 +68,51 @@ export const AssetConsentDocument: React.FC = () => {
           backgroundColor: '#ffffff' 
         });
 
-        // Restore everything perfectly
         allElements.forEach(el => {
             const orig = originalClasses.get(el);
             if (orig !== undefined) el.className = orig;
             (el as HTMLElement).style.removeProperty('color');
         });
-        document.head.removeChild(style);
+        if (document.head.contains(style)) document.head.removeChild(style);
 
-        if (actionButtons) actionButtons.style.display = ''; // restore
+        if (actionButtons) actionButtons.style.display = '';
         docElement.style.removeProperty('border-radius');
         docElement.style.removeProperty('border');
         docElement.style.removeProperty('box-shadow');
 
-        const imgData = canvas.toDataURL('image/jpeg', 0.8);
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-        pdfBase64 = pdf.output('datauristring').split(',')[1]; // Get exactly the base64 content
-      }
+        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
 
-      // 2. Send to backend
+        const imgWidth = 210;
+        const pageHeight = 297;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft >= 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+          heightLeft -= pageHeight;
+        }
+
+        const pdfOutput = pdf.output('datauristring');
+        pdfBase64 = pdfOutput.split(',')[1];
+      }
+    } catch (e) {
+      console.warn("Failed to generate client PDF:", e);
+    }
+
+    try {
       const token = localStorage.getItem('asset_track_token');
-      const res = await fetch(`/api/assets/${asset.id}/send-hr`, {
+      const res = await fetch(`/api/assets/${asset.id}/submit-hr-consent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,33 +120,34 @@ export const AssetConsentDocument: React.FC = () => {
         },
         body: JSON.stringify({ pdfBase64 })
       });
-      if (!res.ok) throw new Error('Failed to dispatch email');
+
+      if (!res.ok) throw new Error('Failed to submit HR consent');
       await refreshAll?.();
-      navigate('/');
+      navigate('/assets');
     } catch (err) {
       console.error(err);
-      alert('Failed to send email to HR. Please try again.');
+      alert('Failed to send consent document to HR. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleSkip = () => {
-    navigate('/');
+    navigate('/assets');
   };
+
+  const rawDate = (asset as any).assignedDate || (asset as any).updatedAt || (asset as any).createdAt || asset.purchaseDate;
+  const formattedAssignedDate = rawDate
+    ? new Date(rawDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
     <div className="max-w-5xl mx-auto space-y-10 py-6 pb-20 animate-fade-in">
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg">
-            <span className="material-symbols-outlined text-xl">fact_check</span>
-          </div>
-          <h1 className="text-4xl font-black tracking-tight dark:text-white">Asset Custody Document</h1>
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-black tracking-tight dark:text-white">Asset Custody Agreement</h1>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Signed Digital Document</p>
         </div>
-        <p className="text-lg text-slate-500 dark:text-slate-400 font-bold max-w-3xl leading-relaxed">
-          This is the digitally signed custody agreement for the asset assigned to you.
-        </p>
       </div>
 
       <div id="consent-document" className="bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col transition-colors">
@@ -162,8 +171,8 @@ export const AssetConsentDocument: React.FC = () => {
               <div>
                 <h2 className="text-4xl font-black tracking-tight dark:text-white leading-none mb-4">{asset.name}</h2>
                 <div className="flex items-center gap-3">
-                   <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Asset Tag:</span>
-                   <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg font-mono text-sm font-bold text-slate-600 dark:text-slate-300">#{asset.id}</span>
+                   <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Asset Number:</span>
+                   <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg font-mono text-sm font-bold text-slate-600 dark:text-slate-300">#{asset.assetNumber || asset.id}</span>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-3">
@@ -181,7 +190,7 @@ export const AssetConsentDocument: React.FC = () => {
                </div>
                <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest">
                  <span className="material-symbols-outlined text-sm">calendar_month</span>
-                 Assigned Oct 24, 2024
+                 Assigned {formattedAssignedDate}
                </div>
             </div>
           </div>
@@ -263,16 +272,53 @@ export const AssetConsentDocument: React.FC = () => {
                  Skip for Now
                </button>
                <button 
-                 onClick={handleSendToHR}
+                 onClick={() => setShowConfirmModal(true)}
                  disabled={isSubmitting}
                  className={`w-full sm:w-auto px-12 py-4 rounded-full bg-[#1985f0] text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/30 transition-all flex items-center justify-center gap-3 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 hover:bg-blue-600'}`}
                >
-                 <span className="material-symbols-outlined text-lg">{isSubmitting ? 'hourglass_empty' : 'send'}</span>
-                 {isSubmitting ? 'Sending...' : 'Send to HR Mail'}
+                 <span className="material-symbols-outlined text-lg">{isSubmitting ? 'hourglass_empty' : 'check_circle'}</span>
+                 {isSubmitting ? 'Confirming...' : 'Confirm Consent'}
                </button>
             </div>
         )}
       </div>
+
+      {/* Confirm Consent Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setShowConfirmModal(false)}></div>
+          <div className="relative bg-white dark:bg-slate-950 w-full max-w-md rounded-[2.5rem] p-8 md:p-10 text-center space-y-6 shadow-2xl border border-blue-500/20 animate-fade-in">
+            <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 text-blue-500 rounded-2xl flex items-center justify-center mx-auto shadow-xl shadow-blue-500/10">
+              <span className="material-symbols-outlined text-3xl font-black">verified</span>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black italic uppercase tracking-tight dark:text-white">Confirm Consent?</h3>
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+                This will finalize your asset custody sign-off and transmit the executed agreement to the HR team.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  handleSendToHR();
+                }}
+                disabled={isSubmitting}
+                className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-xs tracking-widest shadow-2xl shadow-blue-500/30 transition-all flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? <span className="material-symbols-outlined animate-spin text-base">sync</span> : <span className="material-symbols-outlined text-base">check_circle</span>}
+                Confirm Consent
+              </button>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="w-full py-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black uppercase text-xs tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

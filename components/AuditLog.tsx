@@ -1,5 +1,5 @@
-
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAssetTracker } from '../AssetTrackerContext';
 import { UserRole } from '../types';
 
@@ -15,6 +15,9 @@ export const AuditLog: React.FC<AuditLogProps> = ({
   showViewHistory = true 
 }) => {
   const { activities, user } = useAssetTracker();
+  const navigate = useNavigate();
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = limit || 10;
 
   const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
 
@@ -28,7 +31,12 @@ export const AuditLog: React.FC<AuditLogProps> = ({
     });
   }, [activities, user, isSuperAdmin]);
 
-  const displayedActivities = limit ? filteredActivities.slice(0, limit) : filteredActivities;
+  const totalPages = Math.max(1, Math.ceil(filteredActivities.length / pageSize));
+
+  const displayedActivities = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredActivities.slice(start, start + pageSize);
+  }, [filteredActivities, currentPage, pageSize]);
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-full">
@@ -38,7 +46,13 @@ export const AuditLog: React.FC<AuditLogProps> = ({
           <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">{title}</h2>
         </div>
         {showViewHistory && (
-          <button className="text-blue-600 dark:text-blue-400 font-bold text-sm hover:underline">View History</button>
+          <button 
+            onClick={() => navigate('/activity')}
+            className="text-blue-600 dark:text-blue-400 font-bold text-sm hover:underline flex items-center gap-1"
+          >
+            View History
+            <span className="material-symbols-outlined text-sm">arrow_forward</span>
+          </button>
         )}
       </div>
 
@@ -49,8 +63,8 @@ export const AuditLog: React.FC<AuditLogProps> = ({
               <div className="absolute top-8 right-8 w-2 h-2 bg-blue-600 rounded-full"></div>
             )}
             <div className="flex items-start gap-4">
-              <div className={`w-12 h-12 bg-${act.color}-50 dark:bg-${act.color}-900/30 rounded-xl flex items-center justify-center text-${act.color}-600 dark:text-${act.color}-400 shrink-0`}>
-                <span className="material-symbols-outlined">{act.icon}</span>
+              <div className={`w-12 h-12 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0`}>
+                <span className="material-symbols-outlined">{act.icon || 'history'}</span>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-start">
@@ -68,6 +82,32 @@ export const AuditLog: React.FC<AuditLogProps> = ({
           </div>
         )}
       </div>
+
+      {filteredActivities.length > pageSize && (
+        <div className="p-6 border-t border-slate-50 dark:border-slate-800/50 flex items-center justify-between bg-slate-50/30 dark:bg-slate-950/20 shrink-0">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            Page {currentPage} of {totalPages} ({filteredActivities.length} items)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-sm">chevron_left</span>
+              Prev
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
+            >
+              Next
+              <span className="material-symbols-outlined text-sm">chevron_right</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

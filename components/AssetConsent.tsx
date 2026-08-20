@@ -258,8 +258,8 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
               <div>
                 <h2 className="text-4xl font-black tracking-tight dark:text-white leading-none mb-4">{asset.name}</h2>
                 <div className="flex items-center gap-3">
-                   <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Asset Tag:</span>
-                   <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg font-mono text-sm font-bold text-slate-600 dark:text-slate-300">#{asset.id}</span>
+                   <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Asset Number:</span>
+                   <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg font-mono text-sm font-bold text-slate-600 dark:text-slate-300">#{asset.assetNumber || asset.id}</span>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-3">
@@ -277,7 +277,7 @@ export const AssetConsent: React.FC<AssetConsentProps> = ({ onReportIssue }) => 
                </div>
                <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest">
                  <span className="material-symbols-outlined text-sm">calendar_month</span>
-                 Assigned Oct 24, 2024
+                 Assigned {(asset as any).assignedDate ? new Date((asset as any).assignedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ((asset as any).updatedAt || (asset as any).createdAt || asset.purchaseDate) ? new Date((asset as any).updatedAt || (asset as any).createdAt || asset.purchaseDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                </div>
             </div>
           </div>
