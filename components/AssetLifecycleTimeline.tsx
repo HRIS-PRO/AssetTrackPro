@@ -6,6 +6,19 @@ interface Props {
   refreshKey?: number;
 }
 
+// Only surface meaningful field changes — same whitelist as AssetAuditLog
+const FIELD_LABELS: Record<string, string> = {
+  category: 'Category',
+  condition: 'Condition',
+  location: 'Location',
+  department: 'Department',
+  manager: 'Manager',
+  serialNumber: 'Serial Number',
+  modelNumber: 'Model',
+  purchaseDate: 'Purchase Date',
+  description: 'Description',
+  status: 'Status',
+};
 
 export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId, refreshKey }) => {
   const [logs, setLogs] = useState<AssetLifecycleLog[]>([]);
@@ -112,7 +125,7 @@ export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId, refreshKey })
 
               {/* Card */}
               <div className="bg-white dark:bg-slate-900 rounded-3xl border-2 border-slate-100 dark:border-slate-800/60 p-5 md:p-6 shadow-lg hover:shadow-xl transition-all">
-                 <div className="flex items-center justify-between gap-2 mb-3">
+                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                    <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
                      {log.actionType}
                    </span>
@@ -160,15 +173,22 @@ export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId, refreshKey })
                      </p>
                    )}
 
-                   {/* Changed fields */}
-                   {log.metadata?.changes && Object.keys(log.metadata.changes).length > 0 && (
+                   {/* Changed fields — only show whitelisted keys */}
+                   {log.metadata?.changes && Object.keys(log.metadata.changes).some(k => FIELD_LABELS[k]) && (
                      <div className="flex flex-wrap gap-1.5 mt-2.5">
-                       {Object.entries(log.metadata.changes).map(([k, v]) => (
-                         <span key={k} className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 dark:bg-slate-800 rounded text-[10px] font-bold text-slate-500 dark:text-slate-300">
-                           <span className="text-slate-400 capitalize">{k}:</span>
-                           <span className="text-slate-700 dark:text-slate-200 truncate max-w-[140px]">{v === null || v === '' ? '—' : String(v)}</span>
-                         </span>
-                       ))}
+                         {Object.entries(log.metadata.changes)
+                           .filter(([k]) => FIELD_LABELS[k] !== undefined)
+                           .map(([k, v]) => {
+                             const valStr = v === null || v === '' ? '—' : String(v);
+                             const isLong = valStr.length > 25;
+                             return (
+                               <div key={k} className="flex flex-col gap-0.5 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg max-w-full">
+                                 <span className="text-[9px] font-black uppercase text-slate-400">{FIELD_LABELS[k]}</span>
+                                 <span className={`text-[11px] font-bold text-slate-700 dark:text-slate-200 leading-snug ${isLong ? 'break-words whitespace-normal' : 'whitespace-nowrap'}`}>{valStr}</span>
+                               </div>
+                             );
+                           })
+                         }
                      </div>
                    )}
 

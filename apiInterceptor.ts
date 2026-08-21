@@ -3,7 +3,8 @@
  * (VITE_BACKEND_URL or VITE_API_URL) across development and production environments.
  */
 export function buildUrl(path: string): string {
-  const envUrl = (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || '').trim();
+  const metaEnv = (import.meta as any).env || {};
+  const envUrl = (metaEnv.VITE_BACKEND_URL || metaEnv.VITE_API_URL || '').trim();
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 
   if (!envUrl || envUrl === '/api') {

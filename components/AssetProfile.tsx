@@ -16,6 +16,7 @@ interface AssetProfileProps {
   setIsReassigningAssetId: (id: string) => void;
   setIsDecommissioningAssetId: (id: string) => void;
   setIsUnassigningAssetId: (id: string) => void;
+  setIsMaintenanceAssetId?: (id: string) => void;
   onModifyAsset: (id: string) => void;
   allEmployees: any[];
   team: User[];
@@ -24,7 +25,7 @@ interface AssetProfileProps {
 
 export const AssetProfile: React.FC<AssetProfileProps> = ({
   viewingAsset, user, onBack, getStatusColor, acceptAsset, onReportAsset, 
-  setIsReassigningAssetId, setIsDecommissioningAssetId, setIsUnassigningAssetId, onModifyAsset, allEmployees, team, superAdminModals
+  setIsReassigningAssetId, setIsDecommissioningAssetId, setIsUnassigningAssetId, setIsMaintenanceAssetId, onModifyAsset, allEmployees, team, superAdminModals
 }) => {
   const isSuperAdmin = user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN_USER;
   const isAuditor = user.role === UserRole.AUDITOR;
@@ -125,7 +126,7 @@ export const AssetProfile: React.FC<AssetProfileProps> = ({
                </button>
              )}
              
-             <button className="action-card group-repair">
+             <button onClick={() => setIsMaintenanceAssetId?.(viewingAsset.id)} className="action-card group-repair">
                 <span className="material-symbols-outlined text-slate-400 group-hover:text-amber-500">build_circle</span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Maintenance</span>
              </button>
