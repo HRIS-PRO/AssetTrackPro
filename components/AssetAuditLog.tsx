@@ -12,7 +12,6 @@ interface Props {
 
 // Fields worth surfacing in the "what changed" summary; everything else is hidden as noise.
 const FIELD_LABELS: Record<string, string> = {
-  name: 'Name',
   category: 'Category',
   condition: 'Condition',
   location: 'Location',
@@ -20,7 +19,6 @@ const FIELD_LABELS: Record<string, string> = {
   manager: 'Manager',
   serialNumber: 'Serial Number',
   modelNumber: 'Model',
-  purchasePrice: 'Purchase Price',
   purchaseDate: 'Purchase Date',
   description: 'Description',
   status: 'Status',

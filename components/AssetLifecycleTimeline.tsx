@@ -6,6 +6,19 @@ interface Props {
   refreshKey?: number;
 }
 
+// Only surface meaningful field changes — same whitelist as AssetAuditLog
+const FIELD_LABELS: Record<string, string> = {
+  category: 'Category',
+  condition: 'Condition',
+  location: 'Location',
+  department: 'Department',
+  manager: 'Manager',
+  serialNumber: 'Serial Number',
+  modelNumber: 'Model',
+  purchaseDate: 'Purchase Date',
+  description: 'Description',
+  status: 'Status',
+};
 
 export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId, refreshKey }) => {
   const [logs, setLogs] = useState<AssetLifecycleLog[]>([]);
@@ -160,12 +173,14 @@ export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId, refreshKey })
                      </p>
                    )}
 
-                   {/* Changed fields */}
-                   {log.metadata?.changes && Object.keys(log.metadata.changes).length > 0 && (
+                   {/* Changed fields — only show whitelisted keys */}
+                   {log.metadata?.changes && Object.keys(log.metadata.changes).some(k => FIELD_LABELS[k]) && (
                      <div className="flex flex-wrap gap-1.5 mt-2.5">
-                       {Object.entries(log.metadata.changes).map(([k, v]) => (
+                       {Object.entries(log.metadata.changes)
+                         .filter(([k]) => FIELD_LABELS[k] !== undefined)
+                         .map(([k, v]) => (
                          <span key={k} className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 dark:bg-slate-800 rounded text-[10px] font-bold text-slate-500 dark:text-slate-300">
-                           <span className="text-slate-400 capitalize">{k}:</span>
+                           <span className="text-slate-400">{FIELD_LABELS[k]}:</span>
                            <span className="text-slate-700 dark:text-slate-200 truncate max-w-[140px]">{v === null || v === '' ? '—' : String(v)}</span>
                          </span>
                        ))}

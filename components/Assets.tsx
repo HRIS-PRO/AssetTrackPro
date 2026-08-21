@@ -184,7 +184,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       const rows = filteredAssets.map(a => {
         const assignedUser = team.find(u => u.id === a.assignedTo)?.name || 'Unassigned';
         return [
-          a.id, a.name, a.serialNumber || '', a.category, assignedUser, a.department, a.status, a.purchasePrice, a.purchaseDate, a.condition, a.location
+          a.assetNumber || a.id, a.name, a.serialNumber || '', a.category, assignedUser, a.department, a.status, a.purchasePrice, a.purchaseDate, a.condition, a.location
         ];
       });
 
@@ -368,7 +368,6 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       const res = await fetch(`/api/assets/${isMaintenanceAssetId}/maintenance`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
       });
