@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { UserRole, AssetStatus, Asset } from '../types';
 import { useAssetTracker } from '../AssetTrackerContext';
+import { useToast } from './Toast';
 import { AssetProfile } from './AssetProfile';
 import { AddAssetWorkflow } from './AddAssetWorkflow';
 import { EditAssetWorkflow } from './EditAssetWorkflow';
@@ -18,8 +19,9 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
 }) => {
   const {
     user, assets, setAssets, categories, 
-    departments, assetLocations, team, allEmployees
+    departments, assetLocations, team, allEmployees, refreshAll
   } = useAssetTracker();
+  const { addToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -69,6 +71,8 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
   const [reassignSendConsentMail, setReassignSendConsentMail] = useState(true);
   const [isDecommissioningAssetId, setIsDecommissioningAssetId] = useState<string | null>(null);
   const [isSubmittingDecommission, setIsSubmittingDecommission] = useState(false);
+  const [isMaintenanceAssetId, setIsMaintenanceAssetId] = useState<string | null>(null);
+  const [isSubmittingMaintenance, setIsSubmittingMaintenance] = useState(false);
   const [isUnassigningAssetId, setIsUnassigningAssetId] = useState<string | null>(null);
   const [isSubmittingUnassign, setIsSubmittingUnassign] = useState(false);
   const [isEditingAssetId, setIsEditingAssetId] = useState<string | null>(null);
@@ -180,7 +184,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       const rows = filteredAssets.map(a => {
         const assignedUser = team.find(u => u.id === a.assignedTo)?.name || 'Unassigned';
         return [
-          a.id, a.name, a.serialNumber || '', a.category, assignedUser, a.department, a.status, a.purchasePrice, a.purchaseDate, a.condition, a.location
+          a.assetNumber || a.id, a.name, a.serialNumber || '', a.category, assignedUser, a.department, a.status, a.purchasePrice, a.purchaseDate, a.condition, a.location
         ];
       });
 
@@ -332,18 +336,57 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       const token = localStorage.getItem('asset_track_token');
       const res = await fetch(`/api/assets/${isDecommissioningAssetId}/decommission`, {
         method: 'PUT',
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
       });
 
       if (res.ok) {
         const updatedAsset = await res.json();
         setAssets(prev => prev.map(a => a.id === isDecommissioningAssetId ? updatedAsset : a));
         setIsDecommissioningAssetId(null);
+        await refreshAll?.();
+        addToast?.({ title: 'Unit Decommissioned', message: 'Asset status updated to DECOMMISSIONED', type: 'success' });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        addToast?.({ title: 'Decommission Failed', message: errData.message || 'Could not decommission asset', type: 'error' });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      addToast?.({ title: 'Decommission Failed', message: err.message || 'Network error', type: 'error' });
     } finally {
       setIsSubmittingDecommission(false);
+    }
+  };
+
+  const handleMaintenance = async () => {
+    if (!isMaintenanceAssetId) return;
+    setIsSubmittingMaintenance(true);
+    try {
+      const token = localStorage.getItem('asset_track_token');
+      const res = await fetch(`/api/assets/${isMaintenanceAssetId}/maintenance`, {
+        method: 'PUT',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      if (res.ok) {
+        const updatedAsset = await res.json();
+        setAssets(prev => prev.map(a => a.id === isMaintenanceAssetId ? updatedAsset : a));
+        setIsMaintenanceAssetId(null);
+        await refreshAll?.();
+        addToast?.({ title: 'Unit In Maintenance', message: 'Asset status updated to MAINTENANCE', type: 'success' });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        addToast?.({ title: 'Operation Failed', message: errData.message || 'Could not update maintenance status', type: 'error' });
+      }
+    } catch (err: any) {
+      console.error(err);
+      addToast?.({ title: 'Operation Failed', message: err.message || 'Network error', type: 'error' });
+    } finally {
+      setIsSubmittingMaintenance(false);
     }
   };
 
@@ -597,6 +640,33 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         </div>
       )}
 
+      {/* Maintenance Modal */}
+      {isMaintenanceAssetId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsMaintenanceAssetId(null)}></div>
+          <div className="relative bg-white dark:bg-slate-950 w-full max-w-lg rounded-[3rem] shadow-2xl p-10 md:p-14 text-center space-y-8 animate-fade-in border border-amber-500/20">
+            <div className="w-20 h-20 bg-amber-50 dark:bg-amber-900/20 text-amber-500 rounded-2xl flex items-center justify-center mx-auto shadow-xl shadow-amber-500/10">
+              <span className="material-symbols-outlined text-4xl">build_circle</span>
+            </div>
+            <div className="space-y-4">
+              <h2 className="text-3xl font-black italic tracking-tighter dark:text-white uppercase">Flag for Maintenance?</h2>
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 leading-relaxed px-4">
+                This action will mark the asset status as <span className="text-amber-500 underline underline-offset-4">MAINTENANCE</span>. It logs a maintenance activity item and alerts IT repair workflows.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <button onClick={handleMaintenance} disabled={isSubmittingMaintenance} className="w-full py-5 rounded-2xl bg-amber-600 text-white font-black uppercase text-xs tracking-widest shadow-2xl shadow-amber-500/30 hover:bg-amber-500 transition-all flex items-center justify-center gap-3">
+                {isSubmittingMaintenance ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined text-lg">check_circle</span>}
+                Confirm Maintenance
+              </button>
+              <button onClick={() => setIsMaintenanceAssetId(null)} className="w-full py-5 rounded-2xl bg-slate-50 dark:bg-slate-900 text-slate-500 font-black uppercase text-xs tracking-widest hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-100 dark:border-slate-800">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Unassign Modal */}
       {isUnassigningAssetId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
@@ -640,6 +710,7 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
           setIsReassigningAssetId={setIsReassigningAssetId}
           setIsDecommissioningAssetId={setIsDecommissioningAssetId}
           setIsUnassigningAssetId={setIsUnassigningAssetId}
+          setIsMaintenanceAssetId={setIsMaintenanceAssetId}
           onModifyAsset={setIsEditingAssetId}
           allEmployees={allEmployees}
           team={team}

@@ -198,7 +198,7 @@ export const Audits: React.FC = () => {
     const headers = ['Asset ID', 'Name', 'Category', 'Condition', 'Status', 'Audit Result', 'Timestamp', 'Notes'];
     const rows = assets.map(a => {
       const result = verificationResults.find(r => r.assetId === a.id && r.cycleId === selectedAuditToExport?.id);
-      return [a.id, a.name, a.category, a.condition, a.status, result?.result || 'Pending', result?.timestamp || '-', result?.notes || '-'];
+      return [a.assetNumber || a.id, a.name, a.category, a.condition, a.status, result?.result || 'Pending', result?.timestamp || '-', result?.notes || '-'];
     });
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

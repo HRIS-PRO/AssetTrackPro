@@ -12,7 +12,6 @@ interface Props {
 
 // Fields worth surfacing in the "what changed" summary; everything else is hidden as noise.
 const FIELD_LABELS: Record<string, string> = {
-  name: 'Name',
   category: 'Category',
   condition: 'Condition',
   location: 'Location',
@@ -20,7 +19,6 @@ const FIELD_LABELS: Record<string, string> = {
   manager: 'Manager',
   serialNumber: 'Serial Number',
   modelNumber: 'Model',
-  purchasePrice: 'Purchase Price',
   purchaseDate: 'Purchase Date',
   description: 'Description',
   status: 'Status',
@@ -175,7 +173,7 @@ export const AssetAuditLog: React.FC<Props> = ({ assetId, canLog, refreshKey, on
                   <span className="material-symbols-outlined text-lg">{meta.icon}</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">{meta.label}</span>
                     <span className="text-[10px] font-bold text-slate-400 shrink-0">
                       {new Date(log.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -196,12 +194,15 @@ export const AssetAuditLog: React.FC<Props> = ({ assetId, canLog, refreshKey, on
 
                   {fields.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {fields.map((f) => (
-                        <span key={f.label} className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-md text-[10px] font-bold text-slate-500 dark:text-slate-300">
-                          <span className="text-slate-400">{f.label}:</span>
-                          <span className="text-slate-700 dark:text-slate-200 truncate max-w-[140px]">{f.value}</span>
-                        </span>
-                      ))}
+                      {fields.map((f) => {
+                        const isLong = f.value.length > 25;
+                        return (
+                          <div key={f.label} className="flex flex-col gap-0.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg max-w-full">
+                            <span className="text-[9px] font-black uppercase text-slate-400">{f.label}</span>
+                            <span className={`text-[11px] font-bold text-slate-700 dark:text-slate-200 leading-snug ${isLong ? 'break-words whitespace-normal' : 'whitespace-nowrap'}`}>{f.value}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 

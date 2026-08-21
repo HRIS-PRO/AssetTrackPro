@@ -17,6 +17,7 @@ import { RequestAssetModal } from './components/RequestAssetModal';
 import { ReportProblemModal } from './components/ReportProblemModal';
 import { AssetConsent } from './components/AssetConsent';
 import { AssetConsentDocument } from './components/AssetConsentDocument';
+import { ActivityHistory } from './components/ActivityHistory';
 import { ConsentManagement } from './components/ConsentManagement';
 import { ByodConsent } from './components/ByodConsent';
 import { ScanView } from './components/ScanView';
@@ -255,6 +256,7 @@ const AppContent: React.FC = () => {
             <Route path="/requests" element={<Requests
               onRequestAsset={() => setActiveModal('request')}
             />} />
+            <Route path="/activity" element={<ActivityHistory />} />
             <Route path="/audits" element={<Audits />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/profile" element={<Profile />} />

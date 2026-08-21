@@ -18,7 +18,7 @@ export const Settings: React.FC = () => {
     categories, setCategories,
     departments, setDepartments,
     assetLocations, setAssetLocations,
-    orgSettings, saveOrgSettings
+    orgSettings, saveOrgSettings, refreshAll
   } = useAssetTracker();
   const { addToast } = useToast();
 
@@ -344,9 +344,15 @@ export const Settings: React.FC = () => {
       });
       if (res.ok) {
         setCategories(categories.filter(c => c.id !== id));
+        refreshAll?.();
+        addToast({ title: 'Category Removed', message: 'Asset category deleted successfully', type: 'success' });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        addToast({ title: 'Cannot Delete Category', message: errData.message || 'Failed to delete category', type: 'error' });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to delete category", err);
+      addToast({ title: 'Error', message: err.message || 'Failed to delete category', type: 'error' });
     }
   };
 
@@ -385,9 +391,15 @@ export const Settings: React.FC = () => {
       });
       if (res.ok) {
         setAssetLocations(assetLocations.filter(l => l.id !== id));
+        refreshAll?.();
+        addToast({ title: 'Location Removed', message: 'Physical location deleted successfully', type: 'success' });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        addToast({ title: 'Cannot Delete Location', message: errData.message || 'Failed to delete location', type: 'error' });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to delete location", err);
+      addToast({ title: 'Error', message: err.message || 'Failed to delete location', type: 'error' });
     }
   };
 
@@ -728,7 +740,7 @@ export const Settings: React.FC = () => {
                     {cat.mnemonic && (
                       <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 dark:text-blue-600 text-[10px] font-black">{cat.mnemonic.toUpperCase()}</span>
                     )}
-                    <button onClick={() => handleDeleteCategory(cat.id)} className="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">close</button>
+                    <button onClick={() => handleDeleteCategory(cat.id)} className="material-symbols-outlined text-sm opacity-70 group-hover:opacity-100 hover:text-red-400 dark:hover:text-red-500 transition-all cursor-pointer ml-1" title="Delete Category">close</button>
                   </div>
                 ))}
               </div>
@@ -796,7 +808,7 @@ export const Settings: React.FC = () => {
                 {assetLocations.map(loc => (
                   <div key={loc.id} className="group flex items-center gap-2 px-5 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full text-xs font-black uppercase tracking-widest shadow-lg transition-all hover:scale-105">
                     {loc.name}
-                    <button onClick={() => handleDeleteLocation(loc.id)} className="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">close</button>
+                    <button onClick={() => handleDeleteLocation(loc.id)} className="material-symbols-outlined text-sm opacity-70 group-hover:opacity-100 hover:text-red-400 dark:hover:text-red-500 transition-all cursor-pointer ml-1" title="Delete Location">close</button>
                   </div>
                 ))}
               </div>
