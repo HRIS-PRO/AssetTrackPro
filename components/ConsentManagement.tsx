@@ -280,14 +280,14 @@ export const ConsentManagement: React.FC = () => {
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       {/* Top Banner Card */}
-      <div className="bg-[#0F172A] border border-slate-800 p-8 rounded-[2.5rem] shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+      <div className="bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 p-8 rounded-[2.5rem] shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 transition-colors">
         <div className="flex items-center gap-5">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center shadow-lg shadow-indigo-500/10 shrink-0">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-600/10 dark:bg-indigo-600/20 border border-indigo-500/20 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-lg shadow-indigo-500/10 shrink-0">
             <span className="material-symbols-outlined text-3xl font-bold">verified_user</span>
           </div>
           <div>
-            <h1 className="text-2xl font-black tracking-tight text-white">Consent Management</h1>
-            <p className="text-xs font-semibold text-slate-400 mt-1">
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Consent Management</h1>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
               Official employee sign-offs for BYOD Policy & Company Asset Custody.
             </p>
           </div>
@@ -308,20 +308,20 @@ export const ConsentManagement: React.FC = () => {
       {/* Metric KPI Cards (4 Grid) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Metric 1: Overall Compliance */}
-        <div className="bg-[#0F172A] border border-slate-800 p-6 rounded-[2rem] shadow-sm flex flex-col justify-between space-y-4">
+        <div className="bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex flex-col justify-between space-y-4 transition-colors">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Overall Compliance</span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-400">Overall Compliance</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-600/10 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-500/20 dark:border-indigo-500/30">
               <span className="material-symbols-outlined text-lg">verified</span>
             </div>
           </div>
           <div>
             {loading ? (
-              <div className="h-9 w-24 bg-slate-800 animate-pulse rounded-xl my-1"></div>
+              <div className="h-9 w-24 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-xl my-1"></div>
             ) : (
-              <p className="text-4xl font-black text-white tracking-tight">{compliancePercentage}%</p>
+              <p className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">{compliancePercentage}%</p>
             )}
-            <div className="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
               <div 
                 className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-full transition-all duration-1000"
                 style={{ width: `${Math.min(100, Math.max(0, loading ? 0 : compliancePercentage))}%` }}
@@ -331,70 +331,70 @@ export const ConsentManagement: React.FC = () => {
         </div>
 
         {/* Metric 2: BYOD Consents */}
-        <div className="bg-[#0F172A] border border-slate-800 p-6 rounded-[2rem] shadow-sm flex flex-col justify-between space-y-4">
+        <div className="bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex flex-col justify-between space-y-4 transition-colors">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">BYOD Consents</span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-400">BYOD Consents</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-600/10 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-500/20 dark:border-indigo-500/30">
               <span className="material-symbols-outlined text-lg">smartphone</span>
             </div>
           </div>
           <div>
             {loading ? (
-              <div className="h-9 w-24 bg-slate-800 animate-pulse rounded-xl my-1"></div>
+              <div className="h-9 w-24 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-xl my-1"></div>
             ) : (
-              <p className="text-4xl font-black text-white tracking-tight">
-                {liveDirectoryMembers.filter(m => m.byodStatus === 'signed').length} <span className="text-slate-500 text-2xl font-bold">/ {liveDirectoryMembers.length}</span>
+              <p className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">
+                {liveDirectoryMembers.filter(m => m.byodStatus === 'signed').length} <span className="text-slate-400 dark:text-slate-500 text-2xl font-bold">/ {liveDirectoryMembers.length}</span>
               </p>
             )}
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Personal devices registered</p>
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest mt-1">Personal devices registered</p>
           </div>
         </div>
 
         {/* Metric 3: Asset Consents */}
-        <div className="bg-[#0F172A] border border-slate-800 p-6 rounded-[2rem] shadow-sm flex flex-col justify-between space-y-4">
+        <div className="bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex flex-col justify-between space-y-4 transition-colors">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Asset Consents</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-400">Asset Consents</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-600/10 dark:bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-500/20 dark:border-blue-500/30">
               <span className="material-symbols-outlined text-lg">assignment_turned_in</span>
             </div>
           </div>
           <div>
             {loading ? (
-              <div className="h-9 w-24 bg-slate-800 animate-pulse rounded-xl my-1"></div>
+              <div className="h-9 w-24 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-xl my-1"></div>
             ) : (
-              <p className="text-4xl font-black text-white tracking-tight">
-                {effectiveSignedAssetCount} <span className="text-slate-500 text-2xl font-bold">/ {effectiveTotalAssetCount}</span>
+              <p className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">
+                {effectiveSignedAssetCount} <span className="text-slate-400 dark:text-slate-500 text-2xl font-bold">/ {effectiveTotalAssetCount}</span>
               </p>
             )}
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Hardware custody signed</p>
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest mt-1">Hardware custody signed</p>
           </div>
         </div>
 
         {/* Metric 4: Pending Action */}
-        <div className="bg-[#0F172A] border border-slate-800 p-6 rounded-[2rem] shadow-sm flex flex-col justify-between space-y-4">
+        <div className="bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex flex-col justify-between space-y-4 transition-colors">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Pending Action</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-600/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-400">Pending Action</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-600/10 dark:bg-amber-600/20 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-500/20 dark:border-amber-500/30">
               <span className="material-symbols-outlined text-lg">pending_actions</span>
             </div>
           </div>
           <div>
             {loading ? (
-              <div className="h-9 w-24 bg-slate-800 animate-pulse rounded-xl my-1"></div>
+              <div className="h-9 w-24 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-xl my-1"></div>
             ) : (
-              <p className="text-4xl font-black text-white tracking-tight">{effectivePendingAssetCount}</p>
+              <p className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">{effectivePendingAssetCount}</p>
             )}
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Outstanding sign-offs</p>
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest mt-1">Outstanding sign-offs</p>
           </div>
         </div>
       </div>
 
       {/* Organization Consent Directory Section */}
-      <div className="bg-[#0F172A] border border-slate-800 rounded-[2.5rem] p-8 shadow-xl space-y-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-xl space-y-6 transition-colors">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/80">
           <div>
-            <h2 className="text-xl font-black text-white tracking-tight">Organization Consent Directory</h2>
-            <p className="text-xs font-semibold text-slate-400 mt-1">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Organization Consent Directory</h2>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
               Monitor signed BYOD and Asset Custody agreements for all employees.
             </p>
           </div>
@@ -416,12 +416,12 @@ export const ConsentManagement: React.FC = () => {
               placeholder="Search staff, dept, or asset..."
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-              className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-[#162032] border border-slate-800 text-xs font-semibold text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#162032] border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
             />
             {searchTerm && (
               <button
                 onClick={() => { setSearchTerm(''); setCurrentPage(1); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white flex items-center"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center"
               >
                 <span className="material-symbols-outlined text-base">close</span>
               </button>
@@ -437,7 +437,7 @@ export const ConsentManagement: React.FC = () => {
                 className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
                   statusFilter === st 
                     ? 'bg-indigo-600 text-white shadow-md' 
-                    : 'bg-[#162032] text-slate-400 hover:text-white border border-slate-800'
+                    : 'bg-slate-100 dark:bg-[#162032] text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:text-white border border-slate-200 dark:border-slate-800'
                 }`}
               >
                 {st}
@@ -476,19 +476,19 @@ export const ConsentManagement: React.FC = () => {
             paginatedMembers.map((member) => (
               <div
                 key={member.id}
-                className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center p-5 rounded-2xl bg-[#162032]/80 border border-slate-800/70 hover:border-indigo-500/30 transition-all group"
+                className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center p-5 rounded-2xl bg-slate-50/80 dark:bg-[#162032]/80 border border-slate-200/80 dark:border-slate-800/70 hover:border-indigo-500/30 transition-all group"
               >
                 {/* Column 1: Staff Details */}
                 <div className="md:col-span-4 flex items-center gap-4">
                   <img
                     src={member.avatar}
                     alt={member.name}
-                    className="w-11 h-11 rounded-full object-cover border-2 border-slate-700 group-hover:border-indigo-500 transition-all shrink-0"
+                    className="w-11 h-11 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700 group-hover:border-indigo-500 transition-all shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <h3 className="font-bold text-white text-sm leading-tight truncate">{member.name}</h3>
+                    <h3 className="font-bold text-slate-900 dark:text-white text-sm leading-tight truncate">{member.name}</h3>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5 truncate">
-                      {member.department} • <span className="text-indigo-400">{member.roleLabel}</span>
+                      {member.department} • <span className="text-indigo-600 dark:text-indigo-400">{member.roleLabel}</span>
                     </p>
                   </div>
                 </div>

@@ -1,5 +1,5 @@
-
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAssetTracker } from '../AssetTrackerContext';
 
 interface RequestAssetModalProps {
@@ -57,39 +57,39 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
     return 'inventory_2';
   };
 
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose}></div>
-      <div className="relative bg-white dark:bg-slate-950 w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-fade-in flex flex-col border border-slate-200 dark:border-slate-800">
-        <div className="p-8 flex items-start justify-between">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose}></div>
+      <div className="relative z-10 bg-white dark:bg-slate-950 w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-fade-in flex flex-col border border-slate-200 dark:border-slate-800 max-h-[90vh] my-auto">
+        <div className="p-8 flex items-start justify-between border-b border-slate-100 dark:border-slate-800/80">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-3xl font-black">add_shopping_cart</span>
             </div>
             <div>
-              <h2 className="text-2xl font-black tracking-tight dark:text-white">Request New Asset</h2>
-              <p className="text-sm font-bold text-slate-400">Hardware & Equipment provisioning</p>
+              <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Request New Asset</h2>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">Hardware & Equipment provisioning</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-400">
+          <button onClick={onClose} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-400 shrink-0">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
 
-        <div className="px-8 pb-8 space-y-8 overflow-y-auto max-h-[70vh] scrollbar-hide">
+        <div className="p-8 space-y-8 overflow-y-auto scrollbar-hide">
           <div className="space-y-3">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Select Category</label>
             <div className="relative">
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="w-full p-6 rounded-3xl bg-slate-50 dark:bg-slate-900 border-2 border-transparent hover:border-blue-500/30 transition-all flex items-center justify-between group shadow-inner"
+                className="w-full p-5 rounded-3xl bg-slate-50 dark:bg-slate-900 border-2 border-transparent hover:border-blue-500/30 transition-all flex items-center justify-between group shadow-inner"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center text-blue-600">
-                    <span className="material-symbols-outlined">{getCategoryIcon(selectedCategory?.name || '')}</span>
+                  <div className="w-11 h-11 rounded-xl bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center text-blue-600">
+                    <span className="material-symbols-outlined text-xl">{getCategoryIcon(selectedCategory?.name || '')}</span>
                   </div>
                   <div className="text-left">
-                    <p className="font-black text-slate-900 dark:text-white leading-none">{selectedCategory?.name || 'Select Category'}</p>
+                    <p className="font-black text-slate-900 dark:text-white leading-none text-sm">{selectedCategory?.name || 'Select Category'}</p>
                     <p className="text-[10px] font-black text-slate-400 uppercase mt-1">Selected Type</p>
                   </div>
                 </div>
@@ -97,15 +97,15 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
               </button>
 
               {isDropdownOpen && (
-                <div className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-2xl z-50 overflow-hidden animate-fade-in">
+                <div className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-2xl z-50 overflow-hidden animate-fade-in max-h-60 overflow-y-auto">
                   {categories.map(cat => (
                     <button
                       key={cat.id}
                       onClick={() => { setSelectedCategory(cat); setIsDropdownOpen(false); }}
-                      className="w-full p-4 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors"
+                      className="w-full p-4 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors text-left"
                     >
                       <span className="material-symbols-outlined text-slate-400">{getCategoryIcon(cat.name)}</span>
-                      <span className="font-bold text-sm dark:text-white">{cat.name}</span>
+                      <span className="font-bold text-sm text-slate-900 dark:text-white">{cat.name}</span>
                     </button>
                   ))}
                 </div>
@@ -115,17 +115,17 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
 
           <div className="space-y-3">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Priority Level</label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {priorities.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => setPriority(p.id as any)}
                   className={`p-4 rounded-2xl border-2 transition-all text-center flex flex-col items-center justify-center gap-1 ${priority === p.id
-                    ? 'border-blue-600 bg-white dark:bg-slate-900 shadow-lg shadow-blue-500/10'
-                    : 'border-transparent bg-slate-50 dark:bg-slate-900/50 grayscale opacity-60 hover:grayscale-0 hover:opacity-100'
-                    } ${p.id === 'CRITICAL' ? 'col-span-2 sm:col-span-3 py-6' : ''}`}
+                    ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-900/20 shadow-lg shadow-blue-500/10'
+                    : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 grayscale opacity-60 hover:grayscale-0 hover:opacity-100'
+                    }`}
                 >
-                  <p className={`text-[10px] font-black ${priority === p.id ? 'text-blue-600' : 'text-slate-500'}`}>{p.label}</p>
+                  <p className={`text-[10px] font-black ${priority === p.id ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}>{p.label}</p>
                   <p className="text-[10px] font-bold text-slate-400">{p.sub}</p>
                 </button>
               ))}
@@ -136,7 +136,7 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Business Justification</label>
             <textarea
               placeholder="Please describe why this asset is required for your role..."
-              className="w-full p-6 rounded-3xl bg-slate-50 dark:bg-slate-900 border-none resize-none font-bold text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-600 transition-all shadow-inner h-32"
+              className="w-full p-5 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 resize-none font-bold text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-600 transition-all shadow-inner h-32"
               value={justification}
               onChange={(e) => setJustification(e.target.value)}
             />
@@ -144,17 +144,17 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
         </div>
 
         {errorMessage && (
-          <div className="mx-8 mb-4 flex items-start gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border-2 border-red-100 dark:border-red-800 animate-shake">
+          <div className="mx-8 mb-4 flex items-start gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 animate-shake">
             <span className="material-symbols-outlined text-red-500 text-[20px] flex-shrink-0 mt-0.5">error</span>
             <p className="text-sm font-bold text-red-600 dark:text-red-400 leading-tight">{errorMessage}</p>
           </div>
         )}
 
-        <div className="p-8 pt-4 flex gap-4">
+        <div className="p-8 pt-4 flex gap-4 border-t border-slate-100 dark:border-slate-800/80">
           <button
             disabled={isSubmitting}
             onClick={onClose}
-            className="flex-1 py-4 rounded-2xl bg-slate-50 dark:bg-slate-900 font-black text-slate-500 dark:text-slate-400 hover:bg-slate-100 transition-all uppercase text-[10px] tracking-widest disabled:opacity-50"
+            className="flex-1 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 font-black text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-all uppercase text-[10px] tracking-widest disabled:opacity-50"
           >
             Cancel
           </button>
@@ -170,12 +170,13 @@ export const RequestAssetModal: React.FC<RequestAssetModalProps> = ({ isOpen, on
           </button>
         </div>
 
-        <div className="bg-blue-50 dark:bg-blue-900/10 p-6 text-center">
-          <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">
+        <div className="bg-blue-50 dark:bg-blue-900/10 p-4 text-center">
+          <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">
             Asset requests are subject to manager approval and stock availability.
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

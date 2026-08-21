@@ -144,6 +144,7 @@ export interface OrgSettings {
   orgName?: string;
   orgMnemonic?: string;
   contactEmail?: string;
+  hrEmails?: string[];
   theme?: string;
   logoUrl?: string | null;
 }
@@ -157,6 +158,7 @@ export interface Department {
 export enum ReportStatus {
   PENDING = 'PENDING',
   IN_PROGRESS = 'IN_PROGRESS',
+  IN_REVIEW = 'IN_REVIEW',
   RESOLVED = 'RESOLVED',
   REJECTED = 'REJECTED'
 }

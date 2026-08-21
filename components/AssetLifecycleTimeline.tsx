@@ -6,6 +6,19 @@ interface Props {
   refreshKey?: number;
 }
 
+// Only surface meaningful field changes — same whitelist as AssetAuditLog
+const FIELD_LABELS: Record<string, string> = {
+  category: 'Category',
+  condition: 'Condition',
+  location: 'Location',
+  department: 'Department',
+  manager: 'Manager',
+  serialNumber: 'Serial Number',
+  modelNumber: 'Model',
+  purchaseDate: 'Purchase Date',
+  description: 'Description',
+  status: 'Status',
+};
 
 export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId, refreshKey }) => {
   const [logs, setLogs] = useState<AssetLifecycleLog[]>([]);
@@ -106,82 +119,89 @@ export const AssetLifecycleTimeline: React.FC<Props> = ({ assetId, refreshKey })
           return (
             <div key={log.id} className="relative pl-10 group">
               {/* Timeline Node */}
-              <div className={`absolute -left-[26px] top-0 w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transform transition-transform group-hover:scale-110 ${colorClass}`}>
-                 <span className="material-symbols-outlined text-xl">{icon}</span>
+              <div className={`absolute -left-[22px] top-0 w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transform transition-transform group-hover:scale-110 ${colorClass}`}>
+                 <span className="material-symbols-outlined text-lg">{icon}</span>
               </div>
 
               {/* Card */}
-              <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border-[3px] border-slate-50 dark:border-slate-800/50 p-8 shadow-xl hover:shadow-2xl transition-all">
-                 <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-                   <div className="flex items-center gap-3">
-                     <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
-                       {log.actionType}
-                     </span>
-                     <span className="text-xs font-bold text-slate-400">
-                       {new Date(log.createdAt).toLocaleString()}
-                     </span>
-                   </div>
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border-2 border-slate-100 dark:border-slate-800/60 p-5 md:p-6 shadow-lg hover:shadow-xl transition-all">
+                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                   <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
+                     {log.actionType}
+                   </span>
+                   <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                     {new Date(log.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                   </span>
+                 </div>
+
+                 <div className="min-w-0">
+                   {/* Manual note */}
+                   {log.metadata?.note && (
+                     <p className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-relaxed truncate" title={log.metadata.note}>
+                       {log.metadata.note}
+                     </p>
+                   )}
+
+                   {/* Transfer Details / Assignee */}
+                   {(log.previousAssignee || log.newAssignee) && (
+                     <div className="flex flex-col gap-2 mt-2">
+                       {log.previousAssignee && (
+                         <div className="min-w-0">
+                           <p className="text-[9px] font-black uppercase text-slate-400">Previous Custodian</p>
+                           <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate" title={log.previousAssignee.email}>
+                             {log.previousAssignee.email}
+                           </p>
+                         </div>
+                       )}
+                       {log.newAssignee && (
+                         <div className="min-w-0">
+                           <p className="text-[9px] font-black uppercase text-slate-400">New Custodian</p>
+                           <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate" title={log.newAssignee.email}>
+                             {log.newAssignee.email}
+                           </p>
+                         </div>
+                       )}
+                     </div>
+                   )}
+
+                   {/* Status transition */}
+                   {log.metadata?.oldStatus && log.metadata?.newStatus && log.metadata.oldStatus !== log.metadata.newStatus && (
+                     <p className="text-xs font-bold mt-1 text-slate-700 dark:text-slate-200 truncate">
+                       <span className="text-slate-400 uppercase">{log.metadata.oldStatus}</span>
+                       <span className="text-slate-300 mx-1">→</span>
+                       <span className="uppercase">{log.metadata.newStatus}</span>
+                     </p>
+                   )}
+
+                   {/* Changed fields — only show whitelisted keys */}
+                   {log.metadata?.changes && Object.keys(log.metadata.changes).some(k => FIELD_LABELS[k]) && (
+                     <div className="flex flex-wrap gap-1.5 mt-2.5">
+                         {Object.entries(log.metadata.changes)
+                           .filter(([k]) => FIELD_LABELS[k] !== undefined)
+                           .map(([k, v]) => {
+                             const valStr = v === null || v === '' ? '—' : String(v);
+                             const isLong = valStr.length > 25;
+                             return (
+                               <div key={k} className="flex flex-col gap-0.5 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg max-w-full">
+                                 <span className="text-[9px] font-black uppercase text-slate-400">{FIELD_LABELS[k]}</span>
+                                 <span className={`text-[11px] font-bold text-slate-700 dark:text-slate-200 leading-snug ${isLong ? 'break-words whitespace-normal' : 'whitespace-nowrap'}`}>{valStr}</span>
+                               </div>
+                             );
+                           })
+                         }
+                     </div>
+                   )}
+
+                   {/* Actor */}
                    {log.performedBy && (
-                     <div className="flex items-center gap-2">
-                       <img src={`https://ui-avatars.com/api/?name=${log.performedBy.email?.split('@')[0] || 'User'}&background=f1f5f9&color=64748b`} alt="" className="w-8 h-8 rounded-full border-2 border-slate-100" />
-                       <div className="text-right">
-                         <p className="text-[10px] font-black uppercase text-slate-400">Performed by</p>
-                         <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{log.performedBy.email || 'System User'}</p>
-                       </div>
+                     <div className="min-w-0 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/60">
+                       <p className="text-[9px] font-black uppercase text-slate-400 mb-0.5">Performed by</p>
+                       <p className="text-[11px] font-bold text-slate-500 truncate" title={log.performedBy.email || 'System User'}>
+                         {log.performedBy.email || 'System User'}
+                       </p>
                      </div>
                    )}
                  </div>
-
-                 {/* Transfer Detail */}
-                 {(log.previousAssignee || log.newAssignee) && (
-                   <div className="flex items-center gap-6 p-4 bg-slate-50 dark:bg-slate-800/30 rounded-2xl mb-4">
-                     {log.previousAssignee && (
-                       <div className="flex-1">
-                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Previous Custodian</p>
-                         <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{log.previousAssignee.email}</p>
-                       </div>
-                     )}
-                     {log.previousAssignee && log.newAssignee && (
-                       <div className="flex items-center justify-center text-slate-300">
-                         <span className="material-symbols-outlined">arrow_right_alt</span>
-                       </div>
-                     )}
-                     {log.newAssignee && (
-                       <div className="flex-1 text-right">
-                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">New Custodian</p>
-                         <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{log.newAssignee.email}</p>
-                       </div>
-                     )}
-                   </div>
-                 )}
-
-                 {/* Manual note */}
-                 {log.metadata?.note && (
-                   <p className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-relaxed bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl">
-                     {log.metadata.note}
-                   </p>
-                 )}
-
-                 {/* Status transition */}
-                 {log.metadata?.oldStatus && log.metadata?.newStatus && log.metadata.oldStatus !== log.metadata.newStatus && (
-                   <div className="flex items-center gap-2 mt-2 text-xs font-black uppercase tracking-widest">
-                     <span className="text-slate-400">{log.metadata.oldStatus}</span>
-                     <span className="material-symbols-outlined text-sm text-slate-300">arrow_right_alt</span>
-                     <span className="text-slate-700 dark:text-slate-200">{log.metadata.newStatus}</span>
-                   </div>
-                 )}
-
-                 {/* Changed fields */}
-                 {log.metadata?.changes && Object.keys(log.metadata.changes).length > 0 && (
-                   <div className="flex flex-wrap gap-2 mt-3">
-                     {Object.entries(log.metadata.changes).map(([k, v]) => (
-                       <span key={k} className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-50 dark:bg-slate-800 rounded-lg text-[10px] font-bold text-slate-500 dark:text-slate-300">
-                         <span className="text-slate-400 capitalize">{k}:</span>
-                         <span className="text-slate-700 dark:text-slate-200 truncate max-w-[160px]">{v === null || v === '' ? '—' : String(v)}</span>
-                       </span>
-                     ))}
-                   </div>
-                 )}
               </div>
             </div>
           );

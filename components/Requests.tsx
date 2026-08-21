@@ -98,7 +98,6 @@ export const Requests: React.FC<RequestsProps> = ({ onRequestAsset }) => {
 
   const tabs: { key: ActiveTab; label: string; icon: string }[] = [
     { key: 'Provisioning', label: 'Provisioning', icon: 'add_shopping_cart' },
-    { key: 'AssetReports', label: 'Asset Reports', icon: 'report_problem' },
   ];
 
   if (!user) return null;
