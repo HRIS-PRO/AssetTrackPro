@@ -339,7 +339,8 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
+        },
+        body: JSON.stringify({})
       });
 
       if (res.ok) {
@@ -368,8 +369,10 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       const res = await fetch(`/api/assets/${isMaintenanceAssetId}/maintenance`, {
         method: 'PUT',
         headers: {
+          'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
+        },
+        body: JSON.stringify({})
       });
 
       if (res.ok) {
@@ -397,7 +400,11 @@ export const AssetManagement: React.FC<AssetManagementProps> = ({
       const token = localStorage.getItem('asset_track_token');
       const res = await fetch(`/api/assets/${isUnassigningAssetId}/unassign`, {
         method: 'PUT',
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({})
       });
 
       if (res.ok) {
